@@ -2,7 +2,7 @@ name: CI/CD Security Pipeline
 
 on:
   push:
-    branches: [ "naster" ]
+    branches: [ "master" ]
   pull_request:
     branches: [ "master" ]
 
