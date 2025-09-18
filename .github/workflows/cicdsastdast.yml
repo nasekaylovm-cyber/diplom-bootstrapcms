@@ -1,4 +1,4 @@
-name: Zadolbalo
+name: Secure Pipeline
 
 on:
   push:
