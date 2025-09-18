@@ -27,7 +27,7 @@ jobs:
           tools: composer
 
       - name: Install Composer dependencies
-        run: composer install --prefer-dist #--no-progress --no-dev
+        run: composer install --prefer-dist
       # SAST для PHP с помощью Semgrep
       - name: Run Semgrep SAST Scan
         uses: returntocorp/semgrep-action@v1
