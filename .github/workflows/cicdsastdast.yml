@@ -110,11 +110,18 @@ jobs:
     name: Deploy to Production Server
     runs-on: ubuntu-latest
     needs: build
-    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/master')
     
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Debug - Print secrets availability
+        run: |
+          echo "Checking if secrets are available..."
+          echo "SERVER_HOST: ${{ secrets.SERVER_HOST != '' && 'SET' || 'MISSING' }}"
+          echo "SERVER_USERNAME: ${{ secrets.SERVER_USERNAME != '' && 'SET' || 'MISSING' }}"
+          echo "SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY != '' && 'SET' || 'MISSING' }}"
 
       - name: Deploy to Server
         uses: appleboy/ssh-action@v1.0.0
@@ -122,11 +129,17 @@ jobs:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          timeout: 30s
           script: |
             cd /var/www/bootstrap-cms
+            echo "Pulling latest changes from master branch..."
             git pull origin master
+            echo "Installing production dependencies..."
             php /usr/local/bin/composer-1.phar install --no-dev --optimize-autoloader --no-progress --no-interaction
+            echo "Reloading nginx..."
             sudo systemctl reload nginx
+            echo "Deployment completed successfully!"
 
   dast:
     name: DAST Scan with ZAP
