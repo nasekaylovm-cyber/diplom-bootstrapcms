@@ -1,65 +1,31 @@
-name: Secure Pipeline
+name: CI/CD Security Pipeline
 
 on:
   push:
-    branches: [ "master" ]
+    branches: [ "naster" ]
   pull_request:
-    branches: [ "master" ] 
+    branches: [ "master" ]
 
 jobs:
 
-  SAST-Scan:
+  sast:
+    name: SAST Scan with Semgrep
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup PHP
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.3'
-          tools: composer
-
-      - name: Install Composer dependencies
-        run: composer install
-
-      # SAST для PHP с помощью Semgrep
       - name: Run Semgrep SAST Scan
         uses: returntocorp/semgrep-action@v1
         with:
-          config: p/security-audit # Набор правил для security audit
-        continue-on-error: true # Не тормозим из-за ошибок.
-        
-      # Вывод Semgrep в SARIF и загружаем в GitHub Code Scanning
-      - name: Upload Semgrep results to GitHub Code Scanning
-        uses: github/codeql-action/upload-sarif@v3
-        if: always() # Результаты даже если шаг шмякнулся
-        with:
-          sarif_file: semgrep.sarif
-
-      # SAST для JavaScript с помощью ESLint security plugin
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-
-      - name: Install ESLint and security plugin
-        run: |
-          npm install eslint eslint-plugin-security --save-dev
-
-      - name: Run ESLint security scan
-        run: npx eslint . --ext .js,.vue --config .eslintrc.js --format json --output-file eslint-report.json || true
+          config: p/security-audit # Набор правил для поиска уязвимостей
+          sarifUpload: true
         continue-on-error: true
 
-      - name: Upload ESLint results to GitHub Code Scanning
-        uses: github/codeql-action/upload-sarif@v3
-        if: always()
-        with:
-          sarif_file: eslint-report.json
-
-  Build-and-Deploy:
+  build:
+    name: Build Project
     runs-on: ubuntu-latest
-    needs: SAST-Scan # Навернется скан SAST-Scan, считай, что все, приехали
+    needs: sast
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -68,74 +34,67 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.3'
-          tools: composer
 
-      - name: Install Composer dependencies
-        run: composer install --prefer-dist --no-progress --no-dev --optimize-autoloader
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-progress --no-interaction
 
-      - name: Build step (Optimize)
-        run: php artisan optimize:clear
+      - name: Run tests (if any exist)
+        run: vendor/bin/phpunit --colors=always
 
-      # Проверка на секреты в коде
-      - name: Scan for secrets with TruffleHog
-        uses: trufflesecurity/trufflehog@main
-        with:
-          args: '--regex --entropy=False git://./'
-        continue-on-error: true # Не тормозим. Если секрет найден, он будет в логе.
-
-      - name: Deploy to server
-        uses: easingthemes/ssh-deploy@main
-        with:
-          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-          REMOTE_HOST: ${{ secrets.SSH_HOST }}
-          REMOTE_USER: ${{ secrets.SSH_USERNAME }}
-          SOURCE: "./"
-          TARGET: "/var/www/bootstrap-cms/"
-          EXCLUDE: "/.git, /.github, /tests, .env.example, .gitignore, *.md"
-        env:
-          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
-
-      - name: Configure Environment on Server
-        uses: appleboy/ssh-action@master
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USERNAME }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: |
-            cd /var/www/bootstrap-cms
-            # Копируем .env.example в .env (если его нет) и настраиваем
-            if [ ! -f .env ]; then
-              cp .env.example .env
-              sed -i 's/DB_DATABASE=.*/DB_DATABASE=bootstrap_cms/' .env
-              sed -i 's/DB_USERNAME=.*/DB_USERNAME=cms_user/' .env
-              sed -i 's/DB_PASSWORD=.*/DB_PASSWORD=${{ secrets.DB_PASSWORD }}/' .env
-              php artisan key:generate
-            fi
-            # Применяем миграции и настраиваем права
-            php artisan migrate --force
-            php artisan storage:link
-            chown -R www-data:www-data /var/www/bootstrap-cms
-            chmod -R 755 /var/www/bootstrap-cms/storage
-            php artisan optimize
-
-  DAST-Scan:
+  deploy:
+    name: Deploy to Production Server
     runs-on: ubuntu-latest
-    needs: Build-and-Deploy # DAST только после успешного деплоя
+    needs: build
+    
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: OWASP ZAP Full Scan
+      - name: Deploy to Server
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+           
+            cd /home/cms
+            git pull origin master
+            composer install --no-dev --optimize-autoloader
+           
+            sudo systemctl reload nginx
+
+  dast:
+    name: DAST Scan with ZAP
+    runs-on: ubuntu-latest
+    needs: deploy
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: ZAP Full Scan
         uses: zaproxy/action-full-scan@v0.10.0
         with:
-          target: 'http://${{ secrets.SSH_HOST }}/' # Сканируем наше развернутое приложение
-          rules_file_name: 'Light'
+          target: 'http://5.129.250.92'
+          rules_file_name: 'All'
           cmd_options: '-a'
-        continue-on-error: true
+          report_html: 'report.html'
+          report_md: 'report.md'
 
-      - name: Upload ZAP Report
+      - name: Upload ZAP HTML report
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: zap-report
-          path: zap-report.html
+          name: zap-html-report
+          path: report.html
+
+      - name: Upload ZAP Markdown report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: zap-md-report
+          path: report.md
