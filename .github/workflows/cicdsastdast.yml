@@ -125,7 +125,7 @@ jobs:
           port: 22
           timeout: 30s
           script: |
-            cd /var/www/bootstrap-cms
+            cd /var/www/html
             echo "Pulling latest changes from master branch..."
             git pull origin master
             echo "Installing production dependencies..."
