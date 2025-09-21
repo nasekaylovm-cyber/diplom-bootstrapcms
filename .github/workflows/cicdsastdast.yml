@@ -123,7 +123,7 @@ jobs:
           username: root
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 22
-          timeout: 180s
+          timeout: 240s
           script: |
             cd /var/www/html
             echo "Pulling latest changes from master branch..."
@@ -137,8 +137,8 @@ jobs:
             echo "Reloading nginx and php-fpm..."
             sudo systemctl reload nginx
             sudo systemctl reload php7.4-fpm
-            echo "Clearing cache (если используете фреймворк)..."
-            php artisan optimize (для Laravel)
+            echo "Clearing cache"
+            php artisan optimize
             echo "Deployment completed successfully!"
 
   dast:
