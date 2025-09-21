@@ -119,8 +119,10 @@ jobs:
           host: 5.129.250.92
           username: root
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: |
             cd /var/www/html
+        
+            echo "Fixing git ownership issue..."
+            git config --global --add safe.directory /var/www/html
         
             echo "Checking if repository exists..."
             if [ ! -d .git ]; then
@@ -132,23 +134,38 @@ jobs:
               git reset --hard origin/master
             fi
         
-            echo "Installing production dependencies..."
-            composer install --no-dev --optimize-autoloader --no-progress --no-interaction
+            echo "Updating Composer to version 2..."
+            curl -sS https://getcomposer.org/installer | php -- --2
+            mv composer.phar /usr/local/bin/composer
+            chmod +x /usr/local/bin/composer
+        
+            echo "Installing production dependencies with Composer 2..."
+            /usr/local/bin/composer install --no-dev --optimize-autoloader --no-progress --no-interaction
         
             echo "Setting proper permissions..."
             chown -R www-data:www-data /var/www/html
             chmod -R 755 storage bootstrap/cache
         
-            echo "Reloading nginx and php-fpm..."
+            echo "Checking PHP-FPM status..."
+            if systemctl is-active --quiet php7.4-fpm; then
+              echo "Reloading php7.4-fpm..."
+              systemctl reload php7.4-fpm
+            elif systemctl is-active --quiet php8.0-fpm; then
+              echo "Reloading php8.0-fpm..."
+              systemctl reload php8.0-fpm
+            elif systemctl is-active --quiet php8.1-fpm; then
+              echo "Reloading php8.1-fpm..."
+              systemctl reload php8.1-fpm
+            else
+              echo "No PHP-FPM service found, trying to find available version..."
+              php -v
+            fi
+        
+            echo "Reloading nginx..."
             systemctl reload nginx
-            systemctl reload php7.4-fpm
         
-            echo "Clearing cache..."
-            php artisan optimize
-            php artisan config:cache
-            php artisan route:cache
-        
-            echo "Deployment completed successfully!"
+            echo "Skipping artisan commands due to PHP compatibility issues..."
+            echo "Deployment completed with warnings - check PHP compatibility!"
 
   dast:
     name: DAST Scan with ZAP
