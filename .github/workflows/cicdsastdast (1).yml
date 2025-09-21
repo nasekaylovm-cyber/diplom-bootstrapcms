@@ -169,7 +169,7 @@ services:
 networks:
   app-network:
     driver: bridge
-EOL
+            EOL
 
    
         cat > Dockerfile << 'EOL'
