@@ -115,30 +115,31 @@ jobs:
       steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      - name: Build Docker image
-        run: docker build -t my-app:latest .
 
-      - name: Save Docker image
-        run: docker save my-app:latest | gzip > my-app.tar.gz
-
-      - name: Transfer image to server
+      - name: Copy files to server
         uses: appleboy/scp-action@v0.1.3
         with:
           host: 5.129.250.92
           username: root
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: "my-app.tar.gz"
-          target: "/tmp/"
-
-      - name: Load and run on server
+          source: "."
+          target: "/var/www/html"
+          strip_components: 1
+          
+      - name: Build and run Docker container
         uses: appleboy/ssh-action@v1.0.0
         with:
           host: 5.129.250.92
           username: root
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            echo "Loading Docker image..."
-            docker load -i /tmp/my-app.tar.gz
+            cd /var/www/html
+        
+            echo "Checking files..."
+            ls -la
+        
+            echo "Building Docker image..."
+            docker build -t my-app:latest .
         
             echo "Stopping current container..."
             docker stop my-app-container || true
@@ -146,15 +147,11 @@ jobs:
         
             echo "Starting new container..."
             docker run -d \
-            --name my-app-container \
-            -p 80:80 \
-            -v /var/www/html/storage:/app/storage \
-            -v /var/www/html/.env:/app/.env \
-            my-app:latest
-        
-            echo "Cleaning up..."
-            rm /tmp/my-app.tar.gz
-            docker image prune -f
+              --name my-app-container \
+              -p 80:9000 \
+              -v /var/www/html/storage:/var/www/html/storage \
+              -v /var/www/html/.env:/var/www/html/.env \
+              my-app:latest
         
             echo "Deployment completed successfully!"
 
