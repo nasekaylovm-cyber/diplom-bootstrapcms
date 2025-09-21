@@ -116,7 +116,7 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Deploy with Docker Compose
+    - name: Setup and deploy on server
       uses: appleboy/ssh-action@v1.0.0
       with:
         host: 5.129.250.92
@@ -125,12 +125,22 @@ jobs:
         script: |
           cd /var/www/html
         
+          echo "Fixing git ownership issue..."
+          git config --global --add safe.directory /var/www/html
+        
           echo "Pulling latest changes..."
           git fetch origin
           git reset --hard origin/master
         
-          echo "Checking Docker Compose files..."
-          ls -la docker-compose.yml Dockerfile docker/ || echo "Some files might be missing"
+          echo "Checking files..."
+          ls -la docker-compose.yml Dockerfile nginx.conf
+        
+          echo "Installing Docker Compose if needed..."
+          if ! command -v docker-compose &> /dev/null; then
+          echo "Installing Docker Compose..."
+          curl -L "https://github.com/docker/compose/releases/download/v2.20.0/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+          chmod +x /usr/local/bin/docker-compose
+          fi
         
           echo "Stopping existing containers..."
           docker-compose down || true
@@ -142,7 +152,7 @@ jobs:
           docker-compose ps
         
           echo "Viewing app logs..."
-          docker-compose logs app --tail=50 || true
+          docker-compose logs app --tail=20 || true
         
           echo "Deployment completed successfully!"
 
