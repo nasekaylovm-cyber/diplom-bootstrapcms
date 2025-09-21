@@ -106,18 +106,18 @@ jobs:
       env:
         APP_ENV: testing
 
-  deploy:
-    name: Deploy with Docker Compose
-    runs-on: ubuntu-latest
-    needs: build
-    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+deploy:
+  name: Deploy with Docker Compose
+  runs-on: ubuntu-latest
+  needs: build
+  if: github.event_name == 'push' && github.ref == 'refs/heads/master'
   
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+  steps:
+  - name: Checkout code
+    uses: actions/checkout@v4
 
-    - name: Create Docker configuration files
-      run: |
+  - name: Create Docker configuration files
+    run: |
         cat > docker-compose.yml << 'EOF'
 version: '3.8'
 services:
