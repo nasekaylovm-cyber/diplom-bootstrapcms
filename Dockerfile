@@ -13,6 +13,11 @@ COPY . .
 
 RUN composer install --no-dev --optimize-autoloader --no-interaction --no-scripts
 
+RUN echo "APP_KEY=" > .env && \
+    php artisan key:generate --force && \
+    php artisan optimize && \
+    rm .env
+
 RUN chown -R www-data:www-data storage bootstrap/cache
 RUN chmod -R 775 storage bootstrap/cache
 
