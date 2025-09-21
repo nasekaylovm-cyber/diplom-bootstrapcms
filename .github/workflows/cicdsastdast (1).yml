@@ -120,7 +120,7 @@ jobs:
       with:
         host: 5.129.250.92
         username: root
-        key: xSh4H*LJ?-Du@e
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
         source: "."
         target: "/var/www/html"
         strip_components: 1
@@ -215,7 +215,7 @@ jobs:
           with:
             host: 5.129.250.92
             username: root
-            key: xSh4H*LJ?-Du@e
+            key: ${{ secrets.SSH_PRIVATE_KEY }}
             script: |
                 cd /var/www/html
                 echo "Installing Docker Compose..."
