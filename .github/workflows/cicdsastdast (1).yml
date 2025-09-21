@@ -107,26 +107,13 @@ jobs:
         APP_ENV: testing
 
   deploy:
-      name: Deploy to Production Server
-      runs-on: ubuntu-latest
-      needs: build
-      if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    name: Deploy to Production Server
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
   
-      steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Copy files to server
-        uses: appleboy/scp-action@v0.1.3
-        with:
-          host: 5.129.250.92
-          username: root
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: "."
-          target: "/var/www/html"
-          strip_components: 1
-          
-      - name: Build and run Docker container
+    steps:
+      - name: Deploy to Server
         uses: appleboy/ssh-action@v1.0.0
         with:
           host: 5.129.250.92
@@ -135,23 +122,31 @@ jobs:
           script: |
             cd /var/www/html
         
-            echo "Checking files..."
-            ls -la
+            echo "Checking if repository exists..."
+            if [ ! -d .git ]; then
+              echo "Cloning repository..."
+              git clone https://github.com/nasekaylovm-cyber/diplom .
+            else
+              echo "Pulling latest changes..."
+              git fetch origin
+              git reset --hard origin/master
+            fi
         
-            echo "Building Docker image..."
-            docker build -t my-app:latest .
+            echo "Installing production dependencies..."
+            composer install --no-dev --optimize-autoloader --no-progress --no-interaction
         
-            echo "Stopping current container..."
-            docker stop my-app-container || true
-            docker rm my-app-container || true
+            echo "Setting proper permissions..."
+            chown -R www-data:www-data /var/www/html
+            chmod -R 755 storage bootstrap/cache
         
-            echo "Starting new container..."
-            docker run -d \
-              --name my-app-container \
-              -p 80:9000 \
-              -v /var/www/html/storage:/var/www/html/storage \
-              -v /var/www/html/.env:/var/www/html/.env \
-              my-app:latest
+            echo "Reloading nginx and php-fpm..."
+            systemctl reload nginx
+            systemctl reload php7.4-fpm
+        
+            echo "Clearing cache..."
+            php artisan optimize
+            php artisan config:cache
+            php artisan route:cache
         
             echo "Deployment completed successfully!"
 
