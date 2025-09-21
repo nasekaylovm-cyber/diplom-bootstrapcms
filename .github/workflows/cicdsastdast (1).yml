@@ -173,58 +173,58 @@ networks:
 
    
         cat > Dockerfile << 'EOL'
-FROM php:7.4-fpm
-RUN apt-get update && apt-get install -y git curl libpng-dev libonig-dev libxml2-dev zip unzip libzip-dev
-RUN docker-php-ext-install pdo pdo_mysql mbstring exif pcntl bcmath gd zip
-COPY --from=composer:1.10 /usr/bin/composer /usr/bin/composer
-WORKDIR /var/www/html
-COPY . .
-RUN composer install --no-dev --optimize-autoloader --no-interaction
-RUN chown -R www-data:www-data storage bootstrap/cache
-RUN chmod -R 775 storage bootstrap/cache
-EXPOSE 9000
-CMD ["php-fpm"]
-EOL
+        FROM php:7.4-fpm
+        RUN apt-get update && apt-get install -y git curl libpng-dev libonig-dev libxml2-dev zip unzip libzip-dev
+        RUN docker-php-ext-install pdo pdo_mysql mbstring exif pcntl bcmath gd zip
+        COPY --from=composer:1.10 /usr/bin/composer /usr/bin/composer
+        WORKDIR /var/www/html
+        COPY . .
+        RUN composer install --no-dev --optimize-autoloader --no-interaction
+        RUN chown -R www-data:www-data storage bootstrap/cache
+        RUN chmod -R 775 storage bootstrap/cache
+        EXPOSE 9000
+        CMD ["php-fpm"]
+        EOL
 
      
         cat > nginx.conf << 'EOL'
-server {
-    listen 80;
-    index index.php index.html;
-    server_name _;
-    root /var/www/html/public;
-    location / {
-        try_files $uri $uri/ /index.php?$query_string;
-    }
-    location ~ \.php$ {
-        try_files $uri =404;
-        fastcgi_split_path_info ^(.+\.php)(/.+)$;
-        fastcgi_pass app:9000;
-        fastcgi_index index.php;
-        include fastcgi_params;
-        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
-        fastcgi_param PATH_INFO $fastcgi_path_info;
-    }
-    location ~ /\.ht {
-        deny all;
-    }
-}
-EOL
+            server {
+            listen 80;
+            index index.php index.html;
+            server_name _;
+            root /var/www/html/public;
+            location / {
+            try_files $uri $uri/ /index.php?$query_string;
+            }
+            location ~ \.php$ {
+            try_files $uri =404;
+            fastcgi_split_path_info ^(.+\.php)(/.+)$;
+            fastcgi_pass app:9000;
+            fastcgi_index index.php;
+            include fastcgi_params;
+            fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+            fastcgi_param PATH_INFO $fastcgi_path_info;
+            }
+            location ~ /\.ht {
+              deny all;
+              }
+            }
+            EOL
 
-  - name: Deploy containers
-    uses: appleboy/ssh-action@v1.0.0
-    with:
-      host: 5.129.250.92
-      username: root
-      key: ${{ secrets.SSH_PRIVATE_KEY }}
-      script: |
-        cd /var/www/html
-        echo "Installing Docker Compose..."
-        curl -L "https://github.com/docker/compose/releases/download/v2.20.0/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-        chmod +x /usr/local/bin/docker-compose
-        echo "Building containers..."
-        docker-compose up -d --build
-        echo "Deployment completed!"
+         - name: Deploy containers
+            uses: appleboy/ssh-action@v1.0.0
+            with:
+            host: 5.129.250.92
+            username: root
+            key: ${{ secrets.SSH_PRIVATE_KEY }}
+            script: |
+                cd /var/www/html
+                echo "Installing Docker Compose..."
+                curl -L "https://github.com/docker/compose/releases/download/v2.20.0/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+                chmod +x /usr/local/bin/docker-compose
+                echo "Building containers..."
+                docker-compose up -d --build
+                echo "Deployment completed!"
 
 
   dast:
