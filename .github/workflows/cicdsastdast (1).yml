@@ -87,7 +87,6 @@ jobs:
       run: |
         mysql --version || sudo apt-get install -y mysql-client
         echo "Creating test database configuration..."
-        # Создаем минимальную конфигурацию для тестов
         echo "APP_ENV=testing" > .env.testing
         echo "APP_DEBUG=true" >> .env.testing
         echo "APP_KEY=base64:testkey1234567890123456789012345678901234567890" >> .env.testing
@@ -99,7 +98,7 @@ jobs:
 
     - name: Run tests with simplified configuration
       run: |
-        # Запускаем тесты с пропуском сломанных тестов аутентификации
+      
         php artisan test --exclude-group=authentication || \
         vendor/bin/phpunit --colors=always --exclude-group authentication || \
         echo "Some tests may have failed - continuing with deployment"
@@ -121,7 +120,7 @@ jobs:
       with:
         host: 5.129.250.92
         username: root
-        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        key: xSh4H*LJ?-Du@e
         source: "."
         target: "/var/www/html"
         strip_components: 1
@@ -131,7 +130,7 @@ jobs:
       with:
         host: 5.129.250.92
         username: root
-        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        key: xSh4H*LJ?-Du@e
         script: |
           cd /var/www/html
         
@@ -216,7 +215,7 @@ jobs:
           with:
             host: 5.129.250.92
             username: root
-            key: ${{ secrets.SSH_PRIVATE_KEY }}
+            key: xSh4H*LJ?-Du@e
             script: |
                 cd /var/www/html
                 echo "Installing Docker Compose..."
