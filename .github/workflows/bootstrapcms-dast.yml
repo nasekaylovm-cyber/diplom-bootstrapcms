@@ -6,10 +6,16 @@ on:
   pull_request:
     branches: ["nasekaylovm-cyber-patch-1"]
   workflow_dispatch:
+    inputs:
+      target-url:
+        description: '5.129.250.92'
+        required: false
+        default: 'http://127.0.0.1:8080'
 
 jobs:
   zap-scan:
     runs-on: ubuntu-latest
+    
     services:
       mysql:
         image: mysql:5.7
