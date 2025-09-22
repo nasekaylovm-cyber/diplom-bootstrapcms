@@ -37,7 +37,7 @@ jobs:
             su - bootstrapcms
             cd /var/www/bootstrapcms
             git clone https://github.com/BootstrapCMS/CMS.git .
-            git checkout nasekaylovm-cyber-patch-1
+            git checkout master
             composer install
             php artisan migrate --force
             php artisan config:cache
