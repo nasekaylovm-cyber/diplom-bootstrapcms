@@ -1,3 +1,5 @@
+name: DAST - OWASP ZAP
+
 on:
   pull_request:
     branches: ["nasekaylovm-cyber-patch-1"]
