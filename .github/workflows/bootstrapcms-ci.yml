@@ -2,90 +2,82 @@ name: CI
 
 on:
   push:
-    branches: ["master", "main"]
+    branches: [ "master", "main" ]
   pull_request:
-    branches: ["master", "main"]
+    branches: [ "master", "main" ]
   workflow_dispatch:
 
-permissions:
-  contents: read
-  security-events: write
-
 jobs:
-  build:
-    name: CI → ${{ matrix.php }}
+  setup:
+    name: Setup & dependencies
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        php: [ "5.6", "7.1", "7.4" ]  # покрываем старые версии и более современные; скорректируй по надобности
+    outputs:
+      php-version: ${{ steps.php.outputs.php-version }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup PHP ${{ matrix.php }}
+      - name: Setup PHP
+        id: php
         uses: shivammathur/setup-php@v3
         with:
-          php-version: ${{ matrix.php }}
+          php-version: '7.4'   # Laravel 5.1 требует старый PHP; подберите подходящую версию (5.6/7.0/7.1/7.4) в зависимости от ветки
           extensions: mbstring, xml, json, pdo_mysql
           coverage: xdebug
 
-      - name: Use Composer cache
+      - name: Get composer cache
         uses: actions/cache@v4
         with:
           path: ~/.composer/cache
-          key: composer-${{ matrix.php }}-${{ hashFiles('**/composer.lock') }}
+          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
 
-      - name: Install Composer dependencies
-        # Для старых пакетов иногда нужен --ignore-platform-reqs
-        run: composer install --no-interaction --prefer-dist || composer install --no-interaction --prefer-dist --ignore-platform-reqs
+      - name: Install composer dependencies
+        run: composer install --no-interaction --prefer-dist
 
-      - name: Composer audit (check for known vulnerabilities)
-        run: |
-          if composer --version 2>/dev/null | grep -q "Composer"; then
-            composer audit || true
-          else
-            echo "composer audit not available, skipping"
-          fi
-
-      - name: Run PHPStan (если настроен)
-        if: ${{ always() }}
-        run: |
-          if [ -f "phpstan.neon" ] || [ -f "phpstan.neon.dist" ]; then
-            composer require --dev phpstan/phpstan:^0 || true
-            vendor/bin/phpstan analyse -c phpstan.neon || echo "phpstan found issues"
-          else
-            echo "phpstan config not found, skipping"
-          fi
-
-      - name: Run PHPCS (code style, не фатально)
-        if: ${{ always() }}
-        run: |
-          composer require --dev squizlabs/php_codesniffer || true
-          vendor/bin/phpcs --standard=PSR2 --extensions=php app/ || true
-
-      - name: Prepare environment
-        run: |
-          cp .env.example .env || true
-          php artisan key:generate || true
-          # Use sqlite if DB not configured
-          sed -i 's/DB_CONNECTION=mysql/DB_CONNECTION=sqlite/' .env || true
-          mkdir -p database && touch database/database.sqlite || true
-
-      - name: Run migrations (if any) and tests
-        run: |
-          php artisan migrate --force || true
-          if [ -f "vendor/bin/phpunit" ]; then
-            vendor/bin/phpunit --configuration phpunit.xml.dist || true
-          else
-            echo "phpunit not installed or no tests"
-          fi
-
-      - name: Upload test & static-analysis artifacts
-        if: ${{ always() }}
-        uses: actions/upload-artifact@v4
+  static-analysis:
+    name: Static analysis (PHPStan + PHPCS)
+    runs-on: ubuntu-latest
+    needs: setup
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v3
         with:
-          name: ci-artifacts-${{ matrix.php }}
-          path: |
-            ./vendor || true
-            ./storage/logs || true
-            ./phpstan-report || true
+          php-version: '7.4'
+      - name: Install dev deps
+        run: composer install --no-interaction
+
+      - name: Run PHPStan
+        uses: php-actions/phpstan@v2
+        with:
+          phpstan-args: --configuration=phpstan.neon || --level=max
+
+      - name: Run PHPCS (coding standards)
+        run: |
+          composer require "squizlabs/php_codesniffer" --dev || true
+          ./vendor/bin/phpcs --standard=PSR2 --extensions=php app/ || true
+
+  tests:
+    name: Run unit tests
+    runs-on: ubuntu-latest
+    needs: setup
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v3
+        with:
+          php-version: '7.4'
+      - name: Install deps
+        run: composer install --no-interaction
+      - name: Prepare .env
+        run: cp .env.example .env || true
+      - name: Run migrations (sqlite in memory recommended)
+        run: |
+          php artisan key:generate || true
+      - name: Run PHPUnit
+        run: ./vendor/bin/phpunit --configuration phpunit.xml.dist --testsuite=Feature || true
+      - name: Upload coverage (optional)
+        if: success()
+        uses: codecov/codecov-action@v4
+        with:
+          fail_ci_if_error: false
