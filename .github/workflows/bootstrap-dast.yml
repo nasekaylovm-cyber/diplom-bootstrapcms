@@ -1,15 +1,13 @@
 name: DAST - OWASP ZAP
 
 on:
-  push:
-    branches: ["nasekaylovm-cyber-patch-1"]
+
   pull_request:
     branches: ["nasekaylovm-cyber-patch-1"]
   workflow_dispatch:
 
 jobs:
  zap-scan:
-    name: DAST Scan with ZAP
     runs-on: ubuntu-latest
     
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
