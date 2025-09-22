@@ -1,13 +1,13 @@
-Давайте создадим пайплайн с улучшенной обработкой ошибок и формированием подробного отчета о безопасности:
+Давайте создадим пайплайн с полным логированием ошибок и формированием детального отчета:
 
 ```yaml
 name: DAST - OWASP ZAP Security Pipeline
 
 on:
   push:
-    branches: ["nasekaylovm-cyber-patch-1"]
+    branches: "nasekaylovm-cyber-patch-1"
   pull_request:
-    branches: ["nasekaylovm-cyber-patch-1"]
+    branches: "nasekaylovm-cyber-patch-1"
   workflow_dispatch:
     inputs:
       target-url:
@@ -40,7 +40,7 @@ jobs:
     - name: Prepare environment
       run: |
         mkdir -p ${{ env.REPORT_PATH }}
-        cp .env.example .env || true
+        cp.env.example.env || true
         php artisan key:generate || true
         php artisan migrate --force || true
 
@@ -82,29 +82,26 @@ jobs:
         issue_title: 'ZAP Security Scan Report'
       continue-on-error: true
 
-    - name: Generate security report
+    - name: Collect scan logs
+      run: |
+        echo "Collecting logs..."
+        cat /tmp/serve.log >> ${{ env.REPORT_PATH }}/scan-logs.txt
+        echo "### ZAP Scan Output" >> ${{ env.REPORT_PATH }}/scan-logs.txt
+        zap-baseline --version >> ${{ env.REPORT_PATH }}/scan-logs.txt
+
+    - name: Generate comprehensive security report
       run: |
         echo "### Security Pipeline Report" > ${{ env.REPORT_PATH }}/security-report.md
         echo "## Application Status" >> ${{ env.REPORT_PATH }}/security-report.md
         echo "Target URL: ${{ env.TARGET_URL }}" >> ${{ env.REPORT_PATH }}/security-report.md
         
-        if [[ ${{ steps.zap-scan.outcome }} == 'success' ]]; then
-          echo "## ZAP Scan Status: Success" >> ${{ env.REPORT_PATH }}/security-report.md
+        if [[ "${{ job.status }}" == "success" ]]; then
+          echo "## Overall Status: Success" >> ${{ env.REPORT_PATH }}/security-report.md
         else
-          echo "## ZAP Scan Status: Failed" >> ${{ env.REPORT_PATH }}/security-report.md
-          echo "### Errors encountered during scan:" >> ${{ env.REPORT_PATH }}/security-report.md
-          echo "${{ steps.zap-scan.outputs.errors }}" >> ${{ env.REPORT_PATH }}/security-report.md
+          echo "## Overall Status: Failed" >> ${{ env.REPORT_PATH }}/security-report.md
         fi
 
-    - name: Upload security reports
-      uses: actions/upload-artifact@v4
-      with:
-        name: security-reports
-        path: ${{ env.REPORT_PATH }}
-        retention-days: 30
-
-    - name: Publish report to GitHub Pages (optional)
-      uses: peaceiris/actions-gh-pages@v3
-      if: success() || failure()
-      with:
-        github_token: ${{ secrets.GITHUB_TOKEN }}
+        echo "## Scan Details" >> ${{ env.REPORT_PATH }}/security-report.md
+        echo "### Errors Encountered:" >> ${{ env.REPORT_PATH }}/security-report.md
+        echo "```" >> ${{ env.REPORT_PATH }}/security-report.md
+        cat ${{ env.REPORT_PATH }}/scan-logs.txt >> ${{ env.
