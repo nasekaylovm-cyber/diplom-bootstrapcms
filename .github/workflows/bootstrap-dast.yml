@@ -35,7 +35,9 @@ jobs:
           extensions: mbstring, pdo_mysql
 
       - name: Install dependencies
-        run: composer install --no-interaction || composer install --no-interaction --ignore-platform-reqs
+        run: 
+          composer self-update
+          composer install --no-interaction || composer install --no-interaction --ignore-platform-reqs
 
       - name: Prepare .env and DB
         run: |
