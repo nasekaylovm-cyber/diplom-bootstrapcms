@@ -41,6 +41,7 @@ jobs:
               su - bootstrapcms -c "
               cd /var/www/bootstrapcms
               git clone https://github.com/nasekaylovm-cyber/diplom.git .
+              sleep 300
               git checkout nasekaylovm-cyber-patch-1
               composer install --no-dev -o
               cp .env.example .env
