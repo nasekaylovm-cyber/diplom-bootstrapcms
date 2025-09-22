@@ -35,7 +35,7 @@ jobs:
           port: 22
           script: |
             su - bootstrapcms
-            rm -f /var/www/bootstrapcms/{*,.*}
+            rm -R /var/www/bootstrapcms/
             cd /var/www/bootstrapcms
             git clone https://github.com/nasekaylovm-cyber/diplom/tree/nasekaylovm-cyber-patch-1 .
             git checkout master
