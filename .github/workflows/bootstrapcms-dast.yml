@@ -1,11 +1,13 @@
+Давайте решим проблему с Docker образом и создадим пайплайн, который будет корректно обрабатывать ошибки и создавать Issue в GitHub:
 
+```yaml
 name: DAST - OWASP ZAP Security Pipeline
 
 on:
   push:
-    branches: "nasekaylovm-cyber-patch-1"
+    branches: ["nasekaylovm-cyber-patch-1"]
   pull_request:
-    branches: "nasekaylovm-cyber-patch-1"
+    branches: ["nasekaylovm-cyber-patch-1"]
   workflow_dispatch:
     inputs:
       target-url:
@@ -21,85 +23,85 @@ jobs:
       REPORT_PATH: ./security-reports
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Setup PHP environment
-      uses: shivammathur/setup-php@v2
-      with:
-        php-version: '7.4'
-        extensions: mbstring, pdo_mysql, xml, curl, json, tokenizer
+      - name: Setup PHP environment
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '7.4'
+          extensions: mbstring, pdo_mysql, xml, curl, json, tokenizer
 
-    - name: Install dependencies
-      run: |
-        composer clear-cache
-        composer install --no-dev --no-scripts --no-interaction --ignore-platform-reqs || true
+      - name: Install dependencies
+        run: |
+          composer clear-cache
+          composer install --no-dev --no-scripts --no-interaction --ignore-platform-reqs || true
 
-    - name: Prepare environment
-      run: |
-        mkdir -p ${{ env.REPORT_PATH }}
-        cp .env.example .env || true
-        php artisan key:generate || true
-        php artisan migrate --force || true
+      - name: Prepare environment
+        run: |
+          mkdir -p ${{ env.REPORT_PATH }}
+          cp .env.example .env || true
+          php artisan key:generate || true
+          php artisan migrate --force || true
 
-    - name: Start application
-      run: |
-        nohup php artisan serve --host=0.0.0.0 --port=8080 > /tmp/serve.log 2>&1 &
-        sleep 5
+      - name: Start application
+        run: |
+          nohup php artisan serve --host=0.0.0.0 --port=8080 > /tmp/serve.log 2>&1 &
+          sleep 5
 
-    - name: Wait for application
-      run: |
-        MAX_ATTEMPTS=30
-        for i in $(seq 1 $MAX_ATTEMPTS); do
-          if curl -sSf ${{ env.TARGET_URL }}; then
-            echo "Application is up"
-            break
+      - name: Wait for application
+        run: |
+          MAX_ATTEMPTS=30
+          for i in $(seq 1 $MAX_ATTEMPTS); do
+            if curl -sSf ${{ env.TARGET_URL }}; then
+              echo "Application is up"
+              break
+            fi
+            echo "Waiting for application... ($i/$MAX_ATTEMPTS)"
+            sleep 2
+          done
+          if [ $i -eq $MAX_ATTEMPTS ]; then
+            echo "Application failed to start"
+            exit 1
           fi
-          echo "Waiting for application... ($i/$MAX_ATTEMPTS)"
-          sleep 2
-        done
-        if [ $i -eq $MAX_ATTEMPTS ]; then
-          echo "Application failed to start"
-          exit 1
-        fi
 
-    - name: Setup Docker environment
-      run: |
-        docker system prune -f
-        docker pull owasp/zap2docker-weekly
+      - name: Setup Docker environment
+        run: |
+          docker system prune -f
+          docker pull owasp/zap2docker-weekly
 
-    - name: Run ZAP scan with error handling
-      id: zap-scan
-      uses: zaproxy/action-baseline@v0.7.0
-      with:
-        target: ${{ env.TARGET_URL }}
-        docker_name: owasp/zap2docker-weekly
-        cmd_options: '-a -j'
-        fail_action: false
-        allow_issue_writing: true
-        issue_title: 'ZAP Security Scan Report'
-      continue-on-error: true
+      - name: Run ZAP scan with error handling
+        id: zap-scan
+        uses: zaproxy/action-baseline@v0.7.0
+        with:
+          target: ${{ env.TARGET_URL }}
+          docker_name: owasp/zap2docker-weekly
+          cmd_options: '-a -j'
+          fail_action: false
+          allow_issue_writing: true
+          issue_title: 'ZAP Security Scan Report'
+          continue-on-error: true
 
-    - name: Collect all logs and errors
-      run: |
-        echo "Collecting all logs..."
-        mkdir -p ${{ env.REPORT_PATH }}/logs
-        cat /tmp/serve.log >> ${{ env.REPORT_PATH }}/logs/application.log
-        docker logs $(docker ps -lq) >> ${{ env.REPORT_PATH }}/logs/docker.log 2>&1
+      - name: Collect all logs and errors
+        run: |
+          echo "Collecting all logs..."
+          mkdir -p ${{ env.REPORT_PATH }}/logs
+          cat /tmp/serve.log >> ${{ env.REPORT_PATH }}/logs/application.log
+          docker logs $(docker ps -lq) >> ${{ env.REPORT_PATH }}/logs/docker.log 2>&1
 
-    - name: Generate comprehensive security report
-      run: |
-        echo "### Security Pipeline Report" > ${{ env.REPORT_PATH }}/security-report.md
-        echo "## General Information" >> ${{ env.REPORT_PATH }}/security-report.md
-        echo "Target URL: ${{ env.TARGET_URL }}" >> ${{ env.REPORT_PATH }}/security-report.md
-        echo "Date: $(date)" >> ${{ env.REPORT_PATH }}/security-report.md
-        
-        echo "## Pipeline Status" >> ${{ env.REPORT_PATH }}/security-report.md
-        if [ "${{ job.status }}" == "success" ]; then
-          echo "## Overall Status: Success" >> ${{ env.REPORT_PATH }}/security-report.md
-        else
-          echo "## Overall Status: Failed" >> ${{ env.REPORT_PATH }}/security-report.md
-        fi
+      - name: Generate comprehensive security report
+        run: |
+          echo "### Security Pipeline Report" > ${{ env.REPORT_PATH }}/security-report.md
+          echo "## General Information" >> ${{ env.REPORT_PATH }}/security-report.md
+          echo "Target URL: ${{ env.TARGET_URL }}" >> ${{ env.REPORT_PATH }}/security-report.md
+          echo "Date: $(date)" >> ${{ env.REPORT_PATH }}/security-report.md
+          
+          echo "## Pipeline Status" >> ${{ env.REPORT_PATH }}/security-report.md
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "## Overall Status: Success" >> ${{ env.REPORT_PATH }}/security-report.md
+          else
+            echo "## Overall Status: Failed" >> ${{ env.REPORT_PATH }}/security-report.md
+          fi
 
-        echo "## Errors and Issues" >> ${{ env.REPORT_PATH }}/security-report.md
-        echo "### Docker Errors" >> ${{ env.REPORT_PATH }}/security-report.
+          echo "## Errors and Issues" >> ${{ env.REPORT_PATH }}/security-report.md
+          echo "### Docker Errors" >> ${{
