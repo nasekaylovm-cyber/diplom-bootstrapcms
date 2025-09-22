@@ -1,58 +1,60 @@
-name: DAST - OWASP ZAP Remote Scan
+name: DAST - OWASP ZAP
 
 on:
-  schedule:
-    - cron: '0 2 * * 1' # Еженедельно в понедельник в 2:00
+  push:
+    branches: ["nasekaylovm-cyber-patch-1"]
+  pull_request:
+    branches: ["nasekaylovm-cyber-patch-1"]
   workflow_dispatch:
+    inputs:
+      target-url:
+        description: '5.129.250.92'
+        required: false
+        default: 'http://127.0.0.1:8080'
 
 jobs:
-  zap-remote-scan:
+  zap-scan:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
     
+    services:
+      mysql:
+        image: mysql:5.7
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: test
+          MYSQL_EXPLICIT_DEFAULTS_FOR_TIMESTAMP: 1
+        ports:
+          - 3306:3306
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Create ZAP rules configuration
-        run: |
-          mkdir -p .zap
-          cat > .zap/rules.conf << 'EOF'
-          # Правила сканирования OWASP ZAP
-          40012 # XSS (Reflected)
-          40013 # XSS (Persistent) 
-          40014 # XSS (DOM)
-          40016 # SQL Injection
-          40018 # Insecure Configuration
-          40019 # Authentication Issues
-          40022 # CSRF
-          40024 # IDOR
-          40027 # Security Misconfiguration
-          40035 # PHP Injection
-          40045 # Information Disclosure
-          EOF
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '7.4'
+          extensions: mbstring, pdo_mysql, xml, curl, json, tokenizer
 
+      - name: Install dependencies
+        run: 
+          run: composer install --no-dev --no-scripts --no-interaction --ignore-platform-reqs || truet
+
+      - name: Prepare .env and DB
+        run: |
+          cp .env.example .env || true
+          php artisan key:generate || true
+          php artisan migrate --force || true
+      - name: Start application
+        run: nohup php artisan serve --host=5.129.250.92 > /tmp/serve.log 2>&1 &
+
+      - name: Wait for app
+        run: |
+          for i in {1..30}; do
+            curl -sSf http://5.129.250.92 && break || sleep 2
+          done
       - name: Run ZAP baseline scan
         uses: zaproxy/action-baseline@v0.7.0
         with:
           target: 'http://5.129.250.92'
-          cmd_options: '-a -j -t 60'
-          rules_file_name: '.zap/rules.conf'
-          fail_action: false
-
-      - name: Upload scan reports
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: zap-scan-reports
-          path: |
-            *.html
-            *.json
-            *.xml
-          retention-days: 90
-
-      - name: Notify scan completion
-        if: always()
-        run: |
-          echo "ZAP scan completed for http://5.129.250.92"
-          echo "Reports available in artifacts"
+          rules_file_name: 'zap_rules/rules.conf'
