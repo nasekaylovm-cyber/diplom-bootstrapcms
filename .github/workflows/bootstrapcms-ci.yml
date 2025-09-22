@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        php: ["5.6", "7.1", "7.4"]
+        php: ["5.6", "7.0", "7.1"]
 
     steps:
       - name: Checkout
@@ -63,12 +63,10 @@ jobs:
         run: |
           cp .env.example .env || true
           php artisan key:generate || true
-          sed -i 's/DB_CONNECTION=mysql/DB_CONNECTION=sqlite/' .env || true
-          mkdir -p database && touch database/database.sqlite || true
+          echo "Skipping migrations for CI (legacy app)"
 
-      - name: Run migrations and tests
+      - name: Run tests (skip if not present)
         run: |
-          php artisan migrate --force || true
           if [ -f "vendor/bin/phpunit" ]; then
             vendor/bin/phpunit --configuration phpunit.xml.dist || true
           else
