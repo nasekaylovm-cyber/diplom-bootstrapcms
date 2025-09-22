@@ -34,8 +34,12 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 22
           script: |
+            cd /var/www/
+            rm -rf bootstrapcms/*
+            cd /var/www/bootstrapcms
+            mkdir -p bootstrapcms
+            chown -R bootstrapcms:bootstrapcms /var/www/bootstrapcms
             su - bootstrapcms
-            rm -R /var/www/bootstrapcms/
             cd /var/www/bootstrapcms
             git clone https://github.com/nasekaylovm-cyber/diplom/tree/nasekaylovm-cyber-patch-1 .
             git checkout master
