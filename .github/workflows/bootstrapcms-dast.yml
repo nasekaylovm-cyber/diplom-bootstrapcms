@@ -4,6 +4,7 @@ on:
   pull_request:
       branches: ["nasekaylovm-cyber-patch-1"]
   workflow_dispatch:
+   branches: ["nasekaylovm-cyber-patch-1"]
     inputs:
       target-url:
         description: 'http://5.129.250.92'
