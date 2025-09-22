@@ -38,8 +38,8 @@ jobs:
 
       - name: Install dependencies
         run: |
-          rm -f composer.lock
-          composer install --prefer-dist --no-progress --no-interaction --ignore-platform-reqs
+          composer install --prefer-dist --no-progress --no-interaction --no-autoloader --ignore-platform-reqs
+          composer dump-autoload
 
       - name: Prepare .env and DB
         run: |
