@@ -2,19 +2,34 @@ name: "CodeQL"
 
 on:
   push:
-    branches: ["nasekaylovm-cyber-patch-1"]
+    branches: ["nasekaylovm-cyber-patch-1 "]
   pull_request:
-    branches: ["nasekaylovm-cyber-patch-1"]
+    branches: ["nasekaylovm-cyber-patch-1 "]
   schedule:
     - cron: '0 4 * * 0'
   workflow_dispatch:
 
 jobs:
-  codeql:
+  analyze:
     name: Analyze (CodeQL)
     runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+
     steps:
-      - name: Checkout repo
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          # PHP не поддерживается CodeQL → проверяем только JS
+          languages: javascript
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
