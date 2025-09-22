@@ -37,8 +37,9 @@ jobs:
           extensions: mbstring, pdo_mysql, xml, curl, json, tokenizer
 
       - name: Install dependencies
-        run: 
-          composer install --prefer-dist --no-progress --no-suggest
+        run: |
+          rm -f composer.lock
+          composer install --prefer-dist --no-progress --no-interaction --ignore-platform-reqs
 
       - name: Prepare .env and DB
         run: |
