@@ -1,6 +1,4 @@
-Давайте создадим пайплайн с полным логированием ошибок и формированием детального отчета:
 
-```yaml
 name: DAST - OWASP ZAP Security Pipeline
 
 on:
@@ -40,7 +38,7 @@ jobs:
     - name: Prepare environment
       run: |
         mkdir -p ${{ env.REPORT_PATH }}
-        cp.env.example.env || true
+        cp .env.example .env || true
         php artisan key:generate || true
         php artisan migrate --force || true
 
@@ -82,26 +80,26 @@ jobs:
         issue_title: 'ZAP Security Scan Report'
       continue-on-error: true
 
-    - name: Collect scan logs
+    - name: Collect all logs and errors
       run: |
-        echo "Collecting logs..."
-        cat /tmp/serve.log >> ${{ env.REPORT_PATH }}/scan-logs.txt
-        echo "### ZAP Scan Output" >> ${{ env.REPORT_PATH }}/scan-logs.txt
-        zap-baseline --version >> ${{ env.REPORT_PATH }}/scan-logs.txt
+        echo "Collecting all logs..."
+        mkdir -p ${{ env.REPORT_PATH }}/logs
+        cat /tmp/serve.log >> ${{ env.REPORT_PATH }}/logs/application.log
+        docker logs $(docker ps -lq) >> ${{ env.REPORT_PATH }}/logs/docker.log 2>&1
 
     - name: Generate comprehensive security report
       run: |
         echo "### Security Pipeline Report" > ${{ env.REPORT_PATH }}/security-report.md
-        echo "## Application Status" >> ${{ env.REPORT_PATH }}/security-report.md
+        echo "## General Information" >> ${{ env.REPORT_PATH }}/security-report.md
         echo "Target URL: ${{ env.TARGET_URL }}" >> ${{ env.REPORT_PATH }}/security-report.md
+        echo "Date: $(date)" >> ${{ env.REPORT_PATH }}/security-report.md
         
-        if [[ "${{ job.status }}" == "success" ]]; then
+        echo "## Pipeline Status" >> ${{ env.REPORT_PATH }}/security-report.md
+        if [ "${{ job.status }}" == "success" ]; then
           echo "## Overall Status: Success" >> ${{ env.REPORT_PATH }}/security-report.md
         else
           echo "## Overall Status: Failed" >> ${{ env.REPORT_PATH }}/security-report.md
         fi
 
-        echo "## Scan Details" >> ${{ env.REPORT_PATH }}/security-report.md
-        echo "### Errors Encountered:" >> ${{ env.REPORT_PATH }}/security-report.md
-        echo "```" >> ${{ env.REPORT_PATH }}/security-report.md
-        cat ${{ env.REPORT_PATH }}/scan-logs.txt >> ${{ env.
+        echo "## Errors and Issues" >> ${{ env.REPORT_PATH }}/security-report.md
+        echo "### Docker Errors" >> ${{ env.REPORT_PATH }}/security-report.
