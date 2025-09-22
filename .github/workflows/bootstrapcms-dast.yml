@@ -38,7 +38,7 @@ jobs:
 
       - name: Install dependencies
         run: 
-          run: composer install --no-dev --no-scripts --no-interaction --ignore-platform-reqs || truet
+          composer install --no-dev --no-scripts --no-interaction --ignore-platform-reqs || truet
 
       - name: Prepare .env and DB
         run: |
@@ -61,7 +61,7 @@ jobs:
 
           cmd_options: '-a -j'
           fail_action: false
-          allow_issue_writing: true  # ← ВКЛЮЧАЕМ СОЗДАНИЕ ISSUES
+          allow_issue_writing: true
           issue_title: 'ZAP Security Scan Report'
           issue_labels: 'security, zap-scan'
 
