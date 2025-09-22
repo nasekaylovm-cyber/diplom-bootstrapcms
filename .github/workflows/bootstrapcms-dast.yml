@@ -38,7 +38,7 @@ jobs:
 
       - name: Install dependencies
         run: 
-          composer install --no-dev --no-scripts --no-interaction --ignore-platform-reqs || truet
+          composer install --no-dev --no-scripts --no-interaction --ignore-platform-reqs || true
 
       - name: Prepare .env and DB
         run: |
