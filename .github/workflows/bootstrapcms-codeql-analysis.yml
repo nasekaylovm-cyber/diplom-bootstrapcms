@@ -25,7 +25,7 @@ jobs:
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
         with:
-          # PHP не поддерживается CodeQL → проверяем только JS
+          
           languages: javascript
 
       - name: Autobuild
