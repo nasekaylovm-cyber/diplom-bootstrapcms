@@ -34,14 +34,18 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 22
           script: |
-            cd /path/to/your/project
-            git pull origin main
+            su - bootstrapcms
+            cd /var/www/bootstrapcms
+            git clone https://github.com/BootstrapCMS/CMS.git .
+            git checkout nasekaylovm-cyber-patch-1
             composer install
             php artisan migrate --force
             php artisan config:cache
             php artisan route:cache
             php artisan view:cache
+            npm install
             chmod -R 755 storage bootstrap/cache
+            chown -R bootstrapcms:www-data storage bootstrap/cache
             
   security-pipeline:
     needs: [deploy]
