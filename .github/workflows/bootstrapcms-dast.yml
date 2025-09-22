@@ -58,3 +58,17 @@ jobs:
         with:
           target: 'http://5.129.250.92'
           rules_file_name: 'zap_rules/rules.conf'
+
+          cmd_options: '-a -j'
+          fail_action: false
+          allow_issue_writing: true  # ← ВКЛЮЧАЕМ СОЗДАНИЕ ISSUES
+          issue_title: 'ZAP Security Scan Report'
+          issue_labels: 'security, zap-scan'
+
+      - name: Upload HTML report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zap-security-report
+          path: '*.html'
+          retention-days: 30
