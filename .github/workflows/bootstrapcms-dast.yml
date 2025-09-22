@@ -34,7 +34,7 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: '7.4'
-          extensions: mbstring, pdo_mysql
+          extensions: mbstring, pdo_mysql, xml, curl, json, tokenizer
 
       - name: Install dependencies
         run: 
