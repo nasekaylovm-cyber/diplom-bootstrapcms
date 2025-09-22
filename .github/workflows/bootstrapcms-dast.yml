@@ -22,12 +22,12 @@ jobs:
         env:
           MYSQL_ROOT_PASSWORD: root
           MYSQL_DATABASE: test
-        options:
-          --health-cmd=mysqladmin ping --silent
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=3
-          --explicit_defaults_for_timestamp
+          MYSQL_EXPLICIT_DEFAULTS_FOR_TIMESTAMP: 1
+      options: >-
+        --health-cmd="mysqladmin ping --silent"
+        --health-interval=10s
+        --health-timeout=5s
+        --health-retries=3
         ports:
           - 3306:3306
 
