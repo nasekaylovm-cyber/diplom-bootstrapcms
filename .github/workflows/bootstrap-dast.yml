@@ -1,6 +1,8 @@
 name: DAST - OWASP ZAP
 
 on:
+  push:
+    branches: ["nasekaylovm-cyber-patch-1"]
   pull_request:
     branches: ["nasekaylovm-cyber-patch-1"]
   workflow_dispatch:
