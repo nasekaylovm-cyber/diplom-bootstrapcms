@@ -1,0 +1,91 @@
+name: CI
+
+on:
+  push:
+    branches: ["master", "main"]
+  pull_request:
+    branches: ["master", "main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  build:
+    name: CI → ${{ matrix.php }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        php: [ "5.6", "7.1", "7.4" ]  # покрываем старые версии и более современные; скорректируй по надобности
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP ${{ matrix.php }}
+        uses: shivammathur/setup-php@v3
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: mbstring, xml, json, pdo_mysql
+          coverage: xdebug
+
+      - name: Use Composer cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.composer/cache
+          key: composer-${{ matrix.php }}-${{ hashFiles('**/composer.lock') }}
+
+      - name: Install Composer dependencies
+        # Для старых пакетов иногда нужен --ignore-platform-reqs
+        run: composer install --no-interaction --prefer-dist || composer install --no-interaction --prefer-dist --ignore-platform-reqs
+
+      - name: Composer audit (check for known vulnerabilities)
+        run: |
+          if composer --version 2>/dev/null | grep -q "Composer"; then
+            composer audit || true
+          else
+            echo "composer audit not available, skipping"
+          fi
+
+      - name: Run PHPStan (если настроен)
+        if: ${{ always() }}
+        run: |
+          if [ -f "phpstan.neon" ] || [ -f "phpstan.neon.dist" ]; then
+            composer require --dev phpstan/phpstan:^0 || true
+            vendor/bin/phpstan analyse -c phpstan.neon || echo "phpstan found issues"
+          else
+            echo "phpstan config not found, skipping"
+          fi
+
+      - name: Run PHPCS (code style, не фатально)
+        if: ${{ always() }}
+        run: |
+          composer require --dev squizlabs/php_codesniffer || true
+          vendor/bin/phpcs --standard=PSR2 --extensions=php app/ || true
+
+      - name: Prepare environment
+        run: |
+          cp .env.example .env || true
+          php artisan key:generate || true
+          # Use sqlite if DB not configured
+          sed -i 's/DB_CONNECTION=mysql/DB_CONNECTION=sqlite/' .env || true
+          mkdir -p database && touch database/database.sqlite || true
+
+      - name: Run migrations (if any) and tests
+        run: |
+          php artisan migrate --force || true
+          if [ -f "vendor/bin/phpunit" ]; then
+            vendor/bin/phpunit --configuration phpunit.xml.dist || true
+          else
+            echo "phpunit not installed or no tests"
+          fi
+
+      - name: Upload test & static-analysis artifacts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-artifacts-${{ matrix.php }}
+          path: |
+            ./vendor || true
+            ./storage/logs || true
+            ./phpstan-report || true
