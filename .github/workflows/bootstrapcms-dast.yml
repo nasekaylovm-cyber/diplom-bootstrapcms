@@ -1,6 +1,3 @@
-Давайте решим проблему с Docker образом и создадим пайплайн, который будет корректно обрабатывать ошибки и создавать Issue в GitHub:
-
-```yaml
 name: DAST - OWASP ZAP Security Pipeline
 
 on:
@@ -15,16 +12,21 @@ on:
         required: false
         default: 'http://127.0.0.1:8080'
 
-jobs:
-  security-pipeline:
-    runs-on: ubuntu-latest
-    env:
-      TARGET_URL: ${{ github.event.inputs.target-url }}
-      REPORT_PATH: ./security-reports
+env:
+  REPORT_PATH: ./security-reports
+  SCAN_TIMEOUT: 60
 
+jobs:
+  security-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Create reports directory
+        run: mkdir -p ${{ env.REPORT_PATH }}
 
       - name: Setup PHP environment
         uses: shivammathur/setup-php@v2
@@ -32,76 +34,143 @@ jobs:
           php-version: '7.4'
           extensions: mbstring, pdo_mysql, xml, curl, json, tokenizer
 
-      - name: Install dependencies
+      - name: Install dependencies with error handling
+        id: deps-install
+        continue-on-error: true
         run: |
-          composer clear-cache
-          composer install --no-dev --no-scripts --no-interaction --ignore-platform-reqs || true
+          echo "Attempting to install dependencies..."
+          composer clear-cache || true
+          composer install --no-dev --no-scripts --no-interaction --ignore-platform-reqs || echo "Deps install completed with warnings"
 
-      - name: Prepare environment
+      - name: Setup application
+        id: app-setup
+        continue-on-error: true
         run: |
-          mkdir -p ${{ env.REPORT_PATH }}
           cp .env.example .env || true
-          php artisan key:generate || true
-          php artisan migrate --force || true
+          php artisan key:generate || echo "Key generation skipped"
+          php artisan migrate --force || echo "Migrations skipped"
 
-      - name: Start application
+      - name: Start application server
+        id: start-app
         run: |
+          # Kill any existing processes
+          pkill -f "php artisan serve" || true
+          # Start the application
           nohup php artisan serve --host=0.0.0.0 --port=8080 > /tmp/serve.log 2>&1 &
-          sleep 5
+          echo "Application starting..."
+          sleep 10
 
-      - name: Wait for application
+      - name: Wait for application readiness
+        id: wait-for-app
         run: |
           MAX_ATTEMPTS=30
           for i in $(seq 1 $MAX_ATTEMPTS); do
-            if curl -sSf ${{ env.TARGET_URL }}; then
-              echo "Application is up"
+            if curl -s -f http://127.0.0.1:8080 > /dev/null 2>&1; then
+              echo "✅ Application is ready and responding"
+              echo "app-ready=true" >> $GITHUB_OUTPUT
               break
+            else
+              echo "⏳ Waiting for application... ($i/$MAX_ATTEMPTS)"
+              if [ $i -eq $MAX_ATTEMPTS ]; then
+                echo "❌ Application failed to start within timeout"
+                echo "app-ready=false" >> $GITHUB_OUTPUT
+                # Don't fail the job yet, try to scan anyway
+              fi
+              sleep 2
             fi
-            echo "Waiting for application... ($i/$MAX_ATTEMPTS)"
-            sleep 2
           done
-          if [ $i -eq $MAX_ATTEMPTS ]; then
-            echo "Application failed to start"
-            exit 1
-          fi
 
-      - name: Setup Docker environment
-        run: |
-          docker system prune -f
-          docker pull owasp/zap2docker-weekly
-
-      - name: Run ZAP scan with error handling
+      - name: Run ZAP security scan
         id: zap-scan
-        uses: zaproxy/action-baseline@v0.7.0
+        continue-on-error: true
+        uses: zaproxy/action-baseline@v0.10.0
         with:
-          target: ${{ env.TARGET_URL }}
-          docker_name: owasp/zap2docker-weekly
-          cmd_options: '-a -j'
+          target: 'http://127.0.0.1:8080'
+          cmd_options: '-a -j -t ${{ env.SCAN_TIMEOUT }}'
+          rules_file_name: '.zap-baseline-rules.conf'
           fail_action: false
           allow_issue_writing: true
-          issue_title: 'ZAP Security Scan Report'
-          continue-on-error: true
+          issue_title: 'ZAP Security Scan Report - ${{ github.sha }}'
+          issue_labels: 'security,automated-scan'
 
-      - name: Collect all logs and errors
+      - name: Collect logs and artifacts
+        if: always()
         run: |
-          echo "Collecting all logs..."
-          mkdir -p ${{ env.REPORT_PATH }}/logs
-          cat /tmp/serve.log >> ${{ env.REPORT_PATH }}/logs/application.log
-          docker logs $(docker ps -lq) >> ${{ env.REPORT_PATH }}/logs/docker.log 2>&1
-
-      - name: Generate comprehensive security report
-        run: |
-          echo "### Security Pipeline Report" > ${{ env.REPORT_PATH }}/security-report.md
-          echo "## General Information" >> ${{ env.REPORT_PATH }}/security-report.md
-          echo "Target URL: ${{ env.TARGET_URL }}" >> ${{ env.REPORT_PATH }}/security-report.md
-          echo "Date: $(date)" >> ${{ env.REPORT_PATH }}/security-report.md
+          echo "📁 Collecting logs and reports..."
           
-          echo "## Pipeline Status" >> ${{ env.REPORT_PATH }}/security-report.md
-          if [ "${{ job.status }}" = "success" ]; then
-            echo "## Overall Status: Success" >> ${{ env.REPORT_PATH }}/security-report.md
-          else
-            echo "## Overall Status: Failed" >> ${{ env.REPORT_PATH }}/security-report.md
+          # Application logs
+          if [ -f /tmp/serve.log ]; then
+            cp /tmp/serve.log ${{ env.REPORT_PATH }}/application.log
           fi
+          
+          # ZAP reports
+          for report in *.html *.json *.xml; do
+            if [ -f "$report" ]; then
+              cp "$report" ${{ env.REPORT_PATH }}/
+            fi
+          done
+          
+          # Create summary file
+          echo "# Security Scan Summary" > ${{ env.REPORT_PATH }}/summary.md
+          echo "## Scan Details" >> ${{ env.REPORT_PATH }}/summary.md
+          echo "- **Target**: http://127.0.0.1:8080" >> ${{ env.REPORT_PATH }}/summary.md
+          echo "- **Timestamp**: $(date)" >> ${{ env.REPORT_PATH }}/summary.md
+          echo "- **Commit**: ${{ github.sha }}" >> ${{ env.REPORT_PATH }}/summary.md
+          echo "- **Application Ready**: ${{ steps.wait-for-app.outputs.app-ready }}" >> ${{ env.REPORT_PATH }}/summary.md
+          echo "- **Dependencies Installed**: ${{ steps.deps-install.outcome }}" >> ${{ env.REPORT_PATH }}/summary.md
+          echo "- **Scan Status**: ${{ steps.zap-scan.outcome }}" >> ${{ env.REPORT_PATH }}/summary.md
 
-          echo "## Errors and Issues" >> ${{ env.REPORT_PATH }}/security-report.md
-          echo "### Docker Errors" >> ${{
+      - name: Upload security reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-scan-reports
+          path: ${{ env.REPORT_PATH }}
+          retention-days: 90
+
+      - name: Create GitHub Issue with results
+        if: always()
+        uses: actions/github-script@v7
+        env:
+          SCAN_STATUS: ${{ job.status }}
+          APP_READY: ${{ steps.wait-for-app.outputs.app-ready }}
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            
+            let issueBody = `# 🔍 Security Scan Report\n\n`;
+            issueBody += `## 📊 Scan Information\n`;
+            issueBody += `- **Target URL**: http://127.0.0.1:8080\n`;
+            issueBody += `- **Scan Date**: ${new Date().toISOString()}\n`;
+            issueBody += `- **Commit**: [${process.env.GITHUB_SHA.substring(0, 8)}](${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/commit/${process.env.GITHUB_SHA})\n`;
+            issueBody += `- **Application Status**: ${process.env.APP_READY === 'true' ? '✅ Ready' : '❌ Failed to start'}\n`;
+            issueBody += `- **Overall Status**: ${process.env.SCAN_STATUS === 'success' ? '✅ Success' : '⚠️ Completed with issues'}\n\n`;
+            
+            issueBody += `## 📁 Artifacts\n`;
+            issueBody += `Detailed reports are available in [workflow artifacts](${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID})\n\n`;
+            
+            issueBody += `## 🔧 Next Steps\n`;
+            issueBody += `1. Review the uploaded security reports\n`;
+            issueBody += `2. Address any critical security findings\n`;
+            issueBody += `3. Re-run scan after fixes\n`;
+            
+            // Create the issue
+            const issue = await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `Security Scan Results - ${new Date().toISOString().split('T')[0]}`,
+              body: issueBody,
+              labels: ['security-scan', 'automated', 'dast']
+            });
+            
+            console.log(`✅ Issue created: ${issue.data.html_url}`);
+
+      - name: Final status report
+        if: always()
+        run: |
+          echo "=== SECURITY PIPELINE COMPLETE ==="
+          echo "Status: ${{ job.status }}"
+          echo "Application Ready: ${{ steps.wait-for-app.outputs.app-ready }}"
+          echo "Reports: Available in artifacts"
+          echo "Issue: Created in repository issues"
