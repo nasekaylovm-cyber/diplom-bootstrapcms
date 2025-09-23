@@ -40,7 +40,7 @@ jobs:
               chown -R bootstrapcms:bootstrapcms /var/www/bootstrapcms
               su - bootstrapcms -c "
               cd /var/www/bootstrapcms
-              git clone https://github.com/nasekaylovm-cyber/diplom.git .
+              git clone https://github.com/nasekaylovm-cyber/diplom/tree/nasekaylovm-cyber-patch-1 .
               sleep 300
               git checkout nasekaylovm-cyber-patch-1
               composer install --no-dev -o
