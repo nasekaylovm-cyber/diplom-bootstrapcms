@@ -46,35 +46,10 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Run Semgrep scan
-      id: semgrep
+    - name: Semgrep SAST Scan (Console Output Only)
+      run: |
+        docker run --rm -v "$(pwd):/src" returntocorp/semgrep semgrep scan --config=auto --error
       continue-on-error: true
-      run: |
-        semgrep --config=p/security-audit --sarif --output=semgrep-results.sarif .
-
-    - name: Check if SARIF file contains results
-      id: check_sarif
-      run: |
-        if [ -f "semgrep-results.sarif" ]; then
-          # Проверяем, содержит ли файл реальные результаты (не пустой runs array)
-          if jq -e '.runs[] | select(.results != null and .results != [])' semgrep-results.sarif > /dev/null 2>&1; then
-            echo "has_findings=true" >> $GITHUB_OUTPUT
-            echo "SARIF file contains findings"
-          else
-            echo "has_findings=false" >> $GITHUB_OUTPUT
-            echo "SARIF file exists but contains no findings"
-            rm -f semgrep-results.sarif
-          fi
-        else
-          echo "has_findings=false" >> $GITHUB_OUTPUT
-          echo "SARIF file does not exist"
-        fi
-
-    - name: Upload Semgrep results only if contains findings
-      if: steps.check_sarif.outputs.has_findings == 'true'
-      uses: github/codeql-action/upload-sarif@v3
-      with:
-        sarif_file: 'semgrep-results.sarif'
 
     - name: PHP Security Check
       run: |
