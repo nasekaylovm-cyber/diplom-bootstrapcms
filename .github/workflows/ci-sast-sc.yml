@@ -148,22 +148,21 @@ jobs:
               ./storage/logs || true
               ./phpstan-report || true
 
-
   codeql:
-        name: Analyze (CodeQL)
-        runs-on: ubuntu-latest
-        steps:
-          - name: Checkout repo
-            uses: actions/checkout@v4
-    
-          - name: Initialize CodeQL
-            uses: github/codeql-action/init@v3
-            with:
-              languages: php
-    
-          - name: Autobuild
-            uses: github/codeql-action/autobuild@v3
-    
-          - name: Perform CodeQL analysis
-            uses: github/codeql-action/analyze@v3
-   
+    name: Analyze (CodeQL)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+  
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: auto
+  
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+  
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@v3
+     
