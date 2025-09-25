@@ -1,11 +1,11 @@
 name: CD BILD_DEP_DAST
 
 on:
-  workflow_run:
-    workflows: ["CI Security Pipeline - SAST and Security Checks"]
-    types:
-      - completed
-    branches: [main]
+  push:
+    branches: [ nasekaylovm-cyber-patch-1 ]
+  pull_request:
+    branches: [ nasekaylovm-cyber-patch-1 ]
+
 
 jobs:
   build-and-test:
