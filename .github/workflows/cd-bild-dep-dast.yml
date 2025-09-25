@@ -1,4 +1,4 @@
-name: CD Deploy Pipeline - Build, Deploy, DAST
+name: CD BILD_DEP_DAST
 
 on:
   workflow_run:
