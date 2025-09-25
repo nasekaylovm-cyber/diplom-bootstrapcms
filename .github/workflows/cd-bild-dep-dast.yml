@@ -1,106 +1,84 @@
-name: DAST - OWASP ZAP Security Pipeline
+name: CD Deploy Pipeline - Build, Deploy, DAST
 
 on:
-  push:
-    branches: ["nasekaylovm-cyber-patch-1"]
-  pull_request:
-    branches: ["nasekaylovm-cyber-patch-1"]
-  workflow_dispatch:
-    inputs:
-      target-url:
-        description: 'Target URL for scanning'
-        required: false
-        default: 'http://127.0.0.1:8080'
+  workflow_run:
+    workflows: ["CI Security Pipeline - SAST and Security Checks"]
+    types:
+      - completed
+    branches: [main]
 
 jobs:
-  security-pipeline:
-    runs-on: ubuntu-latest
-    env:
-      TARGET_URL: ${{ github.event.inputs.target-url }}
-      REPORT_PATH: ./security-reports
-
+  build-and-test:
+    name: Build Docker Image and Test
+    runs-on: [self-hosted, linux, x64]
+    
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+    - name: Checkout code
+      uses: actions/checkout@v4
 
-      - name: Verify rules file existence
-        run: |
-          if [ ! -f "./zap_rules/rules.conf" ]; then
-            echo "Rules file not found. Continuing without rules."
-            echo "Rules file path: ./zap_rules/rules.conf"
-            touch ./zap_rules/rules.conf
-          fi
-          cat ./zap_rules/rules.conf || echo "Rules file is empty"
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
 
-      - name: Setup PHP environment
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: '7.4'
-          extensions: mbstring, pdo_mysql, xml, curl, json, tokenizer
+    - name: Build Docker image
+      run: |
+        docker build -t bootstrap-cms:latest .
+        
+    - name: Run security scan on Docker image
+      run: |
+        trivy image --exit-code 0 --severity HIGH,CRITICAL --format sarif -o trivy-image-results.sarif bootstrap-cms:latest
 
-      - name: Install dependencies
-        run: |
-          composer clear-cache
-          composer install --no-dev --no-scripts --no-interaction --ignore-platform-reqs || true
+    - name: Upload Docker image scan results
+      uses: github/codeql-action/upload-sarif@v2
+      with:
+        sarif_file: 'trivy-image-results.sarif'
 
-      - name: Prepare environment
-        run: |
-          mkdir -p ${{ env.REPORT_PATH }}
-          cp .env.example .env || true
-          php artisan key:generate || true
-          php artisan migrate --force || true
+    - name: Run container tests
+      run: |
+        docker run -d --name test-cms -p 8080:80 bootstrap-cms:latest
+        sleep 30
+        curl -f http://localhost:8080 || exit 1
+        docker stop test-cms
+        docker rm test-cms
 
-      - name: Start application
-        run: |
-          nohup php artisan serve --host=0.0.0.0 --port=8080 > /tmp/serve.log 2>&1 &
-          sleep 5
+  deploy-to-server:
+    name: Deploy to Production Server
+    runs-on: [self-hosted, linux, x64]
+    needs: build-and-test
+    environment: production
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
 
-      - name: Wait for application
-        run: |
-          MAX_ATTEMPTS=30
-          for i in $(seq 1 $MAX_ATTEMPTS); do
-            if curl -sSf ${{ env.TARGET_URL }}; then
-              echo "Application is up"
-              break
-            fi
-            echo "Waiting for application... ($i/$MAX_ATTEMPTS)"
-            sleep 2
-          done
-          if [ $i -eq $MAX_ATTEMPTS ]; then
-            echo "Application failed to start"
-            exit 1
-          fi
+    - name: Deploy to server
+      run: |
+        chmod +x .github/scripts/deploy.sh
+        ./.github/scripts/deploy.sh
 
-      - name: Setup Docker environment
-        run: |
-          docker system prune -f
-          docker pull owasp/zap2docker-weekly
+  dast-scan:
+    name: DAST - Dynamic Application Security Testing
+    runs-on: ubuntu-latest
+    needs: deploy-to-server
+    
+    steps:
+    - name: Wait for application to be ready
+      run: sleep 60
 
-      - name: Run ZAP scan with error handling
-        id: zap-scan
-        uses: zaproxy/action-baseline@v0.7.0
-        with:
-          target: ${{ env.TARGET_URL }}
-          docker_name: owasp/zap2docker-weekly
-          cmd_options: '-a -j'
-          fail_action: false
-          allow_issue_writing: true
-          issue_title: 'ZAP Security Scan Report'
-          continue-on-error: true
+    - name: ZAP Baseline Scan
+      uses: zaproxy/action-baseline@v0.10.0
+      with:
+        target: 'http://5.129.250.92'
+        rules_file_name: '.zap/rules.tsv'
+        cmd_options: '-a'
 
-      - name: Collect all logs and errors
-        run: |
-          echo "Collecting all logs..."
-          mkdir -p ${{ env.REPORT_PATH }}/logs
-          cat /tmp/serve.log >> ${{ env.REPORT_PATH }}/logs/application.log
-          docker logs $(docker ps -lq) >> ${{ env.REPORT_PATH }}/logs/docker.log 2>&1
+    - name: Nmap Security Scan
+      run: |
+        sudo apt update
+        sudo apt install -y nmap
+        nmap -sV --script vuln 5.129.250.92
 
-      - name: Generate comprehensive security report
-        run: |
-          echo "### Security Pipeline Report" > ${{ env.REPORT_PATH }}/security-report.md
-          echo "## General Information" >> ${{ env.REPORT_PATH }}/security-report.md
-          echo "Target URL: ${{ env.TARGET_URL }}" >> ${{ env.REPORT_PATH }}/security-report.md
-          echo "Date: $(date)" >> ${{ env.REPORT_PATH }}/security-report.md
-          
-          echo "## Pipeline Status" >> ${{ env.REPORT_PATH }}/security-report.md
-          if
+    - name: SSL/TLS Scan
+      uses: wearerequired/ssl-check-action@v1
+      with:
+        domain: 5.129.250.92
+        port: 443
