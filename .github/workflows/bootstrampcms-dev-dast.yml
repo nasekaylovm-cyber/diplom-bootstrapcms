@@ -1,4 +1,4 @@
-name: DAST - OWASP ZAP Security Pipeline
+name: deploy
 
 on:
   push:
@@ -41,7 +41,6 @@ jobs:
               su - bootstrapcms -c "
               cd /var/www/bootstrapcms
               git clone https://github.com/nasekaylovm-cyber/diplom/tree/nasekaylovm-cyber-patch-1 .
-              sleep 300
               git checkout nasekaylovm-cyber-patch-1
               composer install --no-dev -o
               cp .env.example .env
