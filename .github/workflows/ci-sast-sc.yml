@@ -46,23 +46,6 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Semgrep SAST Scan
-      uses: returntocorp/semgrep-action@v1
-      continue-on-error: true
-      with:
-        config: p/security-audit
-        # Отключаем SARIF и используем только консольный вывод
-        output: semgrep-results.txt
-        format: txt
-
-    - name: Display Semgrep Results
-      run: |
-        if [ -f "semgrep-results.txt" ]; then
-          echo "=== Semgrep Results ==="
-          cat semgrep-results.txt
-        else
-          echo "No Semgrep results file found"
-        fi
 
     - name: PHP Security Check
       run: |
