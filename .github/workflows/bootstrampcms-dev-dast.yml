@@ -1,87 +1,83 @@
-name: deploy
+name: Deploy Project
 
 on:
   push:
     branches: ["nasekaylovm-cyber-patch-1"]
   pull_request:
     branches: ["nasekaylovm-cyber-patch-1"]
-  workflow_dispatch:
-
+      
 jobs:
   deploy:
     runs-on: self-hosted
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup PHP environment
+      - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
           php-version: '7.4'
-          extensions: mbstring, pdo_mysql, xml, curl, json, tokenizer
+          extensions: mbstring, dom, curl, xml, json
 
-      - name: Install dependencies
+      - name: Cache Composer dependencies
+        uses: actions/cache@v3
+        with:
+          path: vendor
+          key: ${{ runner.os }}-php-${{ hashFiles('**/composer.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-php-
+
+      - name: Clear Composer cache and install dependencies
         run: |
           composer clear-cache
-          composer install --no-dev --no-scripts --no-interaction --ignore-platform-reqs || true
+          rm -rf vendor/
+          rm composer.lock
+          composer install --no-cache --prefer-dist --optimize-autoloader
+
+      - name: Prepare environment
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+          php artisan config:clear
+          php artisan cache:clear
+
+      - name: Regenerate autoload
+        run: composer dump-autoload
 
       - name: Deploy to server
         uses: appleboy/ssh-action@v0.1.7
         with:
           host: 5.129.250.92
           username: root
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          key: ${{ secrets.SSH_KEY }}
           port: 22
           script: |
-            cd /var/www/
-            rm -rf bootstrapcms
-            mkdir -p bootstrapcms
-            chown -R bootstrapcms:bootstrapcms /var/www/bootstrapcms
+            cd /var/www/bootstrapcms || exit 1
             
-            su - bootstrapcms -c "
-              cd /var/www/bootstrapcms
-              git init
-              git remote add origin https://github.com/nasekaylovm-cyber/diplom.git
-              git fetch origin nasekaylovm-cyber-patch-1
-              git checkout nasekaylovm-cyber-patch-1
-              
-              if [ -f composer.json ]; then
-                composer install --no-dev -o
-                cp .env.example .env
-                php artisan key:generate
-              fi
-            "
+         
+            rm -rf vendor/
+            rm -f composer.lock
             
-            su - bootstrapcms -c "
-              cd /var/www/bootstrapcms
-              if [ -f .env ]; then
-                sed -i 's/DB_DATABASE=.*/DB_DATABASE=bootstrapcms/' .env
-                sed -i 's/DB_USERNAME=.*/DB_USERNAME=bootstrapcms_user/' .env
-                sed -i 's/DB_PASSWORD=.*/DB_PASSWORD=${{ secrets.DB_PASSWORD }}/' .env
-              fi
-            "
+          
+            composer clear-cache
+            composer install --no-cache --prefer-dist
             
-            su - bootstrapcms -c "
-              cd /var/www/bootstrapcms
-              if [ -f artisan ]; then
-                php artisan migrate --force
-                php artisan config:cache
-                php artisan route:cache
-                php artisan view:cache
-              fi
-              
-              if [ -f package.json ]; then
-                npm install --production
-              fi
-            "
-            
-            if [ -d /var/www/bootstrapcms/storage ]; then
-              chown -R bootstrapcms:www-data /var/www/bootstrapcms/storage
+          
+            if [ -f .env ]; then
+              cp .env.example .env
+              php artisan key:generate
             fi
             
-            if [ -d /var/www/bootstrapcms/bootstrap/cache ]; then
-              chown -R bootstrapcms:www-data /var/www/bootstrapcms/bootstrap/cache
+            
+            if [ -f artisan ]; then
+              php artisan migrate --force
+              php artisan config:cache
+              php artisan route:cache
+              php artisan view:cache
             fi
             
-            chmod -R 755 /var/www/bootstrapcms/storage
+            
+            chown -R www-data:www-data storage/
+            chown -R www-data:www-data bootstrap/cache/
+            chmod -R 755 storage/
