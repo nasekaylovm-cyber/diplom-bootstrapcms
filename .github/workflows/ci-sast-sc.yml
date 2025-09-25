@@ -71,41 +71,52 @@ jobs:
           bandit -r . -f json -o bandit-results.json || true
         fi
 
-  build:
+  build: 
       name: CI → PHP 8.1
       runs-on: ubuntu-latest
-      
+    
       steps:
-        - name: Checkout code
-          uses: actions/checkout@v4
-  
-        - name: Setup PHP 8.1
-          uses: shivammathur/setup-php@v2
-          with:
-            php-version: '8.1'
-            extensions: mbstring, xml, json, pdo_mysql
-  
-        - name: Cache Composer dependencies
-          uses: actions/cache@v4
-          with:
-            path: |
-              ~/.composer/cache
-              vendor
-            key: composer-${{ hashFiles('**/composer.lock') }}
-  
-        - name: Update Composer dependencies
-          run: |
-            composer update --no-interaction --prefer-dist
-            composer install --no-interaction --prefer-dist
-  
-        - name: Install PHPUnit and dependencies
-          run: |
-            composer require --dev phpunit/phpunit:^9.0
-            composer require --dev phpunit/phpunit-mock-objects:^7.0
-  
-        - name: Run Tests
-          run: |
-            vendor/bin/phpunit
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP 8.1
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+          extensions: mbstring, xml, json, pdo_mysql
+
+      - name: Cache Composer dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.composer/cache
+            vendor
+          key: composer-${{ hashFiles('**/composer.lock') }}
+
+      - name: Update Composer dependencies
+        run: |
+          composer update --no-interaction --prefer-dist
+
+      - name: Install Composer dependencies
+        run: |
+          composer install --no-interaction --prefer-dist
+
+      - name: Clear compiled files
+        run: |
+          php artisan clear-compiled
+
+      - name: Prepare environment
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+
+      - name: Run migrations
+        run: |
+          php artisan migrate --force
+
+      - name: Run tests
+        run: |
+          vendor/bin/phpunit
 
   codeql:
     name: Analyze (CodeQL)
