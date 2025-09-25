@@ -30,43 +30,58 @@ jobs:
         uses: appleboy/ssh-action@v0.1.7
         with:
           host: 5.129.250.92
-          username: root
+          username: bootstrapcms
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 22
           script: |
-              cd /var/www/
-              rm -rf bootstrapcms
-              mkdir -p bootstrapcms
-              chown -R bootstrapcms:bootstrapcms /var/www/bootstrapcms
-              su - bootstrapcms -c "
+            cd /var/www/
+            rm -rf bootstrapcms
+            mkdir -p bootstrapcms
+            chown -R bootstrapcms:bootstrapcms /var/www/bootstrapcms
+            
+            su - bootstrapcms -c "
               cd /var/www/bootstrapcms
-              git clone https://github.com/nasekaylovm-cyber/diplom/tree/nasekaylovm-cyber-patch-1 .
+              git init
+              git remote add origin https://github.com/nasekaylovm-cyber/diplom.git
+              git fetch origin nasekaylovm-cyber-patch-1
               git checkout nasekaylovm-cyber-patch-1
-              composer install --no-dev -o
-              cp .env.example .env
-              php artisan key:generate
-              "
-
-              su - bootstrapcms -c "
-              cd /var/www/bootstrapcms
-              sed -i 's/DB_DATABASE=.*/DB_DATABASE=bootstrapcms/' .env
-              sed -i 's/DB_USERNAME=.*/DB_USERNAME=bootstrapcms_user/' .env
-              sed -i 's/DB_PASSWORD=.*/DB_PASSWORD=${{ secrets.DB_PASSWORD }}/' .env
-              "
-             
-              su - bootstrapcms -c "
-              cd /var/www/bootstrapcms
-              php artisan migrate --force
-              php artisan config:cache
-              php artisan route:cache
-              php artisan view:cache
-              npm install --production
-              "
               
+              if [ -f composer.json ]; then
+                composer install --no-dev -o
+                cp .env.example .env
+                php artisan key:generate
+              fi
+            "
+            
+            su - bootstrapcms -c "
+              cd /var/www/bootstrapcms
+              if [ -f .env ]; then
+                sed -i 's/DB_DATABASE=.*/DB_DATABASE=bootstrapcms/' .env
+                sed -i 's/DB_USERNAME=.*/DB_USERNAME=bootstrapcms_user/' .env
+                sed -i 's/DB_PASSWORD=.*/DB_PASSWORD=${{ secrets.DB_PASSWORD }}/' .env
+              fi
+            "
+            
+            su - bootstrapcms -c "
+              cd /var/www/bootstrapcms
+              if [ -f artisan ]; then
+                php artisan migrate --force
+                php artisan config:cache
+                php artisan route:cache
+                php artisan view:cache
+              fi
+              
+              if [ -f package.json ]; then
+                npm install --production
+              fi
+            "
+            
+            if [ -d /var/www/bootstrapcms/storage ]; then
               chown -R bootstrapcms:www-data /var/www/bootstrapcms/storage
+            fi
+            
+            if [ -d /var/www/bootstrapcms/bootstrap/cache ]; then
               chown -R bootstrapcms:www-data /var/www/bootstrapcms/bootstrap/cache
-              chmod -R 755 /var/www/bootstrapcms/storage
-              chmod -R 755 /var/www/bootstrapcms/bootstrap/cache
-
-              systemctl reload nginx
-          
+            fi
+            
+            chmod -R 755 /var/www/bootstrapcms/storage
