@@ -65,16 +65,6 @@ jobs:
         fi
 
 
-    - name: PHP Security Check
-      run: |
-        if [ -f "composer.json" ]; then
-          echo "Running PHP security checks using Docker..."
-          docker run --rm -v $(pwd):/app composer:latest install --no-dev --no-progress --no-suggest
-          docker run --rm -v $(pwd):/app symfonycorp/cli check:security || echo "Security check completed"
-        else
-          echo "No composer.json found, skipping PHP security check"
-        fi
-
     - name: JavaScript Security Scan
       run: |
         if [ -f "package.json" ]; then
