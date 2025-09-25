@@ -30,7 +30,7 @@ jobs:
         uses: appleboy/ssh-action@v0.1.7
         with:
           host: 5.129.250.92
-          username: bootstrapcms
+          username: root
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 22
           script: |
