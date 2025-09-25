@@ -12,34 +12,39 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3
 
-      - name: Setup PHP
+      - name: Install PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '7.4'
-          extensions: mbstring, dom, curl, xml, json
+          php-version: 7.4
+
+      - name: Update Composer
+        run: |
+          composer self-update
+          composer self-update --update-keys
+
+      - name: Fix license in composer.json
+        run: |
+          sed -i 's/"AGPL-3.0"/"AGPL-3.0-only"/g' composer.json
+          composer validate
+
+      - name: Clear Composer cache
+        run: composer clear-cache
 
       - name: Install dependencies
         run: |
-            rm -rf vendor/
-            rm -f composer.lock
-            composer diagnose
-            composer install \
-              --prefer-dist \
-              --no-interaction \
-              --no-plugins \
-              --no-scripts \
-              --optimize-autoloader
-      
-      - name: Enable scripts and autoload
+          composer install --prefer-dist --no-interaction
+          composer dump-autoload
+
+      - name: Verify installation
         run: |
-            composer dump-autoload
-            composer install --no-interaction --optimize-autoloader
-      
-      - name: Prepare environment
+          composer diagnose
+          php -v
+          composer -v
+
+      - name: Cleanup
         run: |
-              cp .env.example .env
-              php artisan key:generate
-              php artisan config:clear
-              php artisan cache:clear
+          rm -rf vendor/
+          rm -f composer.lock
+          composer clear-cache
