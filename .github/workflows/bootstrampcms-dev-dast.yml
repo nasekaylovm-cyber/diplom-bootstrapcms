@@ -28,12 +28,9 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-php-
 
-      - name: Clear Composer cache and install dependencies
+      - name: Composer dependencies
         run: |
-          composer clear-cache
-          rm -rf vendor/
-          rm composer.lock
-          composer install --no-cache --prefer-dist --optimize-autoloader
+          composer install --prefer-dist --optimize-autoloader
 
       - name: Prepare environment
         run: |
@@ -60,8 +57,7 @@ jobs:
             rm -f composer.lock
             
           
-            composer clear-cache
-            composer install --no-cache --prefer-dist
+            composer install --prefer-dist
             
           
             if [ -f .env ]; then
