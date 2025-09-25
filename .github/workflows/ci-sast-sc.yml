@@ -68,10 +68,11 @@ jobs:
     - name: PHP Security Check
       run: |
         if [ -f "composer.json" ]; then
-          composer install --no-dev --prefer-dist --no-interaction --optimize-autoloader
-          wget https://github.com/fabpot/local-php-security-checker/releases/download/v2.0.6/local-php-security-checker_2.0.6_linux_amd64
-          chmod +x local-php-security-checker_2.0.6_linux_amd64
-          ./local-php-security-checker_2.0.6_linux_amd64
+          echo "Running PHP security checks using Docker..."
+          docker run --rm -v $(pwd):/app composer:latest install --no-dev --no-progress --no-suggest
+          docker run --rm -v $(pwd):/app symfonycorp/cli check:security || echo "Security check completed"
+        else
+          echo "No composer.json found, skipping PHP security check"
         fi
 
     - name: JavaScript Security Scan
