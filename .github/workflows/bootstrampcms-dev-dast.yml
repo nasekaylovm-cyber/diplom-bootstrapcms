@@ -19,10 +19,19 @@ jobs:
         with:
           php-version: 7.4
 
-      - name: Update Composer
+      - name: Update Composer keys
         run: |
+          # Сначала обновляем Composer без ключей
           composer self-update
-          composer self-update --update-keys
+          
+          # Затем обновляем ключи через прямой запрос
+          curl -sS https://composer.github.io/installer.sig > installer.sig
+          curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+          php composer.phar self-update --update-keys
+          
+          # Удаляем временные файлы
+          rm installer.sig
+          rm composer.phar
 
       - name: Fix license in composer.json
         run: |
@@ -42,9 +51,6 @@ jobs:
           composer diagnose
           php -v
           composer -v
-
-      - name: Cleanup
-        run: |
           rm -rf vendor/
           rm -f composer.lock
           composer clear-cache
