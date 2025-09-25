@@ -20,60 +20,26 @@ jobs:
           php-version: '7.4'
           extensions: mbstring, dom, curl, xml, json
 
-      - name: Cache Composer dependencies
-        uses: actions/cache@v3
-        with:
-          path: vendor
-          key: ${{ runner.os }}-php-${{ hashFiles('**/composer.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-php-
-
-      - name: Composer dependencies
+      - name: Install dependencies
         run: |
-          composer install --prefer-dist --optimize-autoloader
-
-      - name: Prepare environment
-        run: |
-          cp .env.example .env
-          php artisan key:generate
-          php artisan config:clear
-          php artisan cache:clear
-
-      - name: Regenerate autoload
-        run: composer dump-autoload
-
-      - name: Deploy to server
-        uses: appleboy/ssh-action@v0.1.7
-        with:
-          host: 5.129.250.92
-          username: root
-          key: ${{ secrets.SSH_KEY }}
-          port: 22
-          script: |
-            cd /var/www/bootstrapcms || exit 1
-            
-         
             rm -rf vendor/
             rm -f composer.lock
-            
-          
-            composer install --prefer-dist
-            
-          
-            if [ -f .env ]; then
+            composer diagnose
+            composer install \
+              --prefer-dist \
+              --no-interaction \
+              --no-plugins \
+              --no-scripts \
+              --optimize-autoloader
+      
+      - name: Enable scripts and autoload
+        run: |
+            composer dump-autoload
+            composer install --no-interaction --optimize-autoloader
+      
+      - name: Prepare environment
+        run: |
               cp .env.example .env
               php artisan key:generate
-            fi
-            
-            
-            if [ -f artisan ]; then
-              php artisan migrate --force
-              php artisan config:cache
-              php artisan route:cache
-              php artisan view:cache
-            fi
-            
-            
-            chown -R www-data:www-data storage/
-            chown -R www-data:www-data bootstrap/cache/
-            chmod -R 755 storage/
+              php artisan config:clear
+              php artisan cache:clear
