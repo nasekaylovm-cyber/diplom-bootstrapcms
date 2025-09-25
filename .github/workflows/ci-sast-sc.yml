@@ -69,7 +69,7 @@ jobs:
       run: |
         if [ -f "package.json" ]; then
           echo "Running JavaScript security checks..."
-          npm install --silent
+          npm install --force --silent
           npm audit --audit-level moderate || {
             echo "NPM audit found vulnerabilities"
             exit 0
