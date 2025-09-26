@@ -1,4 +1,4 @@
-ame: CI - SAST and Security Checks
+name: CI - SAST and Security Checks
 
 on:
   push:
