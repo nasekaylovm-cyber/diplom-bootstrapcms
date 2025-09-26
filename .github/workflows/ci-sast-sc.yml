@@ -1,4 +1,4 @@
-name: CI - SAST and Security Checks
+ame: CI - SAST and Security Checks
 
 on:
   push:
@@ -23,11 +23,6 @@ jobs:
           args: '--no-update git file://. --only-verified --json'
       continue-on-error: true
 
-  security-checks:
-    name: Security Checks - Secrets and Configuration
-    runs-on: ubuntu-latest
-    
-    steps:
     - name: Checkout code
       uses: actions/checkout@v4
       with:
@@ -56,7 +51,7 @@ jobs:
   sast-analysis:
     name: SAST - Static Application Security Testing
     runs-on: ubuntu-latest
-    needs: security-checks
+    needs: secret-scan
     
     steps:
     - name: Checkout code
