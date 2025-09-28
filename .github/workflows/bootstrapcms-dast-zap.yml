@@ -1,4 +1,4 @@
-name: DAST- OWASP ZAP
+name: "bootstrapcms DAST- OWASP ZAP"
 
 on:
   pull_request:
