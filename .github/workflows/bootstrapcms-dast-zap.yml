@@ -30,7 +30,8 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: '7.4'
-          tools: composer:v1   # принудительно ставим Composer v1
+          tools: composer:v1   # принудительно ставим Composer версии v1
+          coverage: none        # отключаем Xdebug
           extensions: mbstring, pdo_mysql
 
       - name: Install dependencies
