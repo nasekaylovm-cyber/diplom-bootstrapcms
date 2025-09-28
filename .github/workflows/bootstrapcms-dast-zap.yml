@@ -2,7 +2,7 @@ name: bootstrapcms DAST-OWASP ZAP
 
 on:
   pull_request:
-    branches: ["main", "master"]
+    branches: ["nasekaylovm-cyber-patch-1"]
   workflow_dispatch:
 
 jobs:
@@ -35,7 +35,7 @@ jobs:
           extensions: mbstring, pdo_mysql
 
       - name: Install dependencies
-        run: composer install --no-interaction || composer install --no-interaction --ignore-platform-reqs
+        run: composer install --no-interaction --prefer-dist --no-scripts || composer install --no-interaction --ignore-platform-reqs
 
       - name: Prepare .env and DB
         run: |
