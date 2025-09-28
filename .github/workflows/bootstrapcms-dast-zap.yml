@@ -8,8 +8,14 @@ on:
   workflow_dispatch:
 
 jobs:
-  zap-scan:
-    # более старый образ для поддержки PHP 5.6
+  # сначала CI (чтобы убедиться что проект собирается)
+  ci:
+    uses: ./.github/workflows/bootstrapcms-ci.yml   # переиспользуем bootstrapcms-CI как reusable workflow
+    secrets: inherit
+
+  # OWASP ZAP
+  dast:
+    needs: ci            # запускается только если CI прошёл успешно
     runs-on: ubuntu-20.04
 
     services:
@@ -27,11 +33,10 @@ jobs:
           - 3306:3306
 
     steps:
-      # Получаем код
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Ставим PHP 5.6 и Composer v1 (старый формат lock-файла)
+      # Ставим старый PHP и Composer v1 для Laravel 5.1
       - name: Setup PHP 5.6
         uses: shivammathur/setup-php@v2
         with:
@@ -40,29 +45,24 @@ jobs:
           coverage: none
           extensions: mbstring, pdo_mysql
 
-      # Устанавливаем зависимости без плагинов и скриптов
       - name: Install dependencies
         run: composer install --no-interaction --prefer-dist --no-plugins --no-scripts
 
-      # Подготовка .env и базы (может частично падать – игнорируем ошибки)
       - name: Prepare .env and DB
         run: |
           cp .env.example .env || true
           php artisan key:generate || true
           php artisan migrate --force || true
 
-      # Запуск встроенного сервера Laravel
       - name: Start application
         run: nohup php artisan serve --host=127.0.0.1 --port=8080 > /tmp/serve.log 2>&1 &
 
-      # Ожидание поднятия приложения
       - name: Wait for app
         run: |
           for i in {1..30}; do
             curl -sSf http://127.0.0.1:8080 && break || sleep 2
           done
 
-      # Запуск OWASP ZAP
       - name: Run ZAP baseline scan
         uses: zaproxy/action-baseline@v0.7.0
         with:
