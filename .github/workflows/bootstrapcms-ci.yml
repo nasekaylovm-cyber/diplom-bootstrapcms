@@ -1,4 +1,4 @@
-name: CI
+name: bootstrapcms CI
 
 on:
   push:
