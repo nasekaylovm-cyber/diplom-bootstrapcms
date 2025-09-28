@@ -1,4 +1,4 @@
-name: "CodeQL"
+name: "bootstrapcms CodeQL"
 
 on:
   push:
