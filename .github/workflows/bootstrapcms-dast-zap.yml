@@ -1,4 +1,4 @@
-name: "bootstrapcms DAST-OWASP ZAP"
+name: bootstrapcms DAST-OWASP ZAP
 
 on:
   pull_request:
@@ -7,7 +7,7 @@ on:
 
 jobs:
   zap-scan:
-    # ⬇️ более старый образ для поддержки PHP 5.6
+    # более старый образ для поддержки PHP 5.6
     runs-on: ubuntu-20.04
 
     services:
@@ -25,11 +25,11 @@ jobs:
           - 3306:3306
 
     steps:
-      # 1️⃣ Получаем код
+      # Получаем код
       - name: Checkout
         uses: actions/checkout@v4
 
-      # 2️⃣ Ставим PHP 5.6 и Composer v1 (старый формат lock-файла)
+      # Ставим PHP 5.6 и Composer v1 (старый формат lock-файла)
       - name: Setup PHP 5.6
         uses: shivammathur/setup-php@v2
         with:
@@ -38,29 +38,29 @@ jobs:
           coverage: none
           extensions: mbstring, pdo_mysql
 
-      # 3️⃣ Устанавливаем зависимости без плагинов и скриптов
+      # Устанавливаем зависимости без плагинов и скриптов
       - name: Install dependencies
         run: composer install --no-interaction --prefer-dist --no-plugins --no-scripts
 
-      # 4️⃣ Подготовка .env и базы (может частично падать – игнорируем ошибки)
+      # Подготовка .env и базы (может частично падать – игнорируем ошибки)
       - name: Prepare .env and DB
         run: |
           cp .env.example .env || true
           php artisan key:generate || true
           php artisan migrate --force || true
 
-      # 5️⃣ Запуск встроенного сервера Laravel
+      # Запуск встроенного сервера Laravel
       - name: Start application
         run: nohup php artisan serve --host=127.0.0.1 --port=8080 > /tmp/serve.log 2>&1 &
 
-      # 6️⃣ Ожидание поднятия приложения
+      # Ожидание поднятия приложения
       - name: Wait for app
         run: |
           for i in {1..30}; do
             curl -sSf http://127.0.0.1:8080 && break || sleep 2
           done
 
-      # 7️⃣ Запуск OWASP ZAP
+      # Запуск OWASP ZAP
       - name: Run ZAP baseline scan
         uses: zaproxy/action-baseline@v0.7.0
         with:
