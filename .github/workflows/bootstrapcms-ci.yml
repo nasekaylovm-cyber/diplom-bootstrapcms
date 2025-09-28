@@ -1,4 +1,4 @@
-name: bootstrapcms CI
+name: "bootstrapcms CI"
 
 on:
   push:
