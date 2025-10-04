@@ -2,20 +2,13 @@ name: bootstrapcms DAST-OWASP ZAP
 
 on:
   push:
-    branches: ["nasekaylovm-cyber-patch-1 "]
+    branches: ["master"]
   pull_request:
-    branches: ["nasekaylovm-cyber-patch-1 "]
+    branches: ["master"]
   workflow_dispatch:
 
 jobs:
-  # сначала CI (чтобы убедиться что проект собирается)
-  ci:
-    uses: ./.github/workflows/bootstrapcms-ci.yml   # переиспользуем bootstrapcms-CI как reusable workflow
-    secrets: inherit
-
-  # OWASP ZAP
   dast:
-    needs: ci            # запускается только если CI прошёл успешно
     runs-on: ubuntu-20.04
 
     services:
@@ -36,7 +29,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Ставим старый PHP и Composer v1 для Laravel 5.1
       - name: Setup PHP 5.6
         uses: shivammathur/setup-php@v2
         with:
@@ -67,4 +59,5 @@ jobs:
         uses: zaproxy/action-baseline@v0.7.0
         with:
           target: 'http://127.0.0.1:8080'
-          rules_file_name: 'zap_rules/rules.conf'
+          # если есть правила → оставь, иначе удали строку ниже
+          # rules_file_name: 'zap_rules/rules.conf'
