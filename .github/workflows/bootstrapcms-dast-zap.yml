@@ -19,24 +19,33 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Prepare workspace
+        run: |
+          mkdir -p zap-reports
+          chmod -R 777 zap-reports
+
       - name: Start local PHP server
         run: |
-          php -S 127.0.0.1:8080 -t public > /tmp/server.log 2>&1 &
+          if [ -d "public" ]; then
+            php -S 127.0.0.1:8080 -t public > /tmp/server.log 2>&1 &
+          elif [ -d "src" ]; then
+            php -S 127.0.0.1:8080 -t src > /tmp/server.log 2>&1 &
+          else
+            php -S 127.0.0.1:8080 > /tmp/server.log 2>&1 &
+          fi
           sleep 10
+          echo "Server started. Checking..."
+          curl -I http://127.0.0.1:8080 || true
 
       - name: Run OWASP ZAP Baseline Scan manually (Docker)
         run: |
           docker pull ghcr.io/zaproxy/zaproxy:stable
-          docker run --network=host -v $PWD:/zap/wrk/:rw ghcr.io/zaproxy/zaproxy:stable \
+          docker run --user root --network=host \
+            -v $PWD/zap-reports:/zap/wrk/:rw \
+            ghcr.io/zaproxy/zaproxy:stable \
             zap-baseline.py -t http://127.0.0.1:8080 \
-            -J report_json.json -w report_md.md -r report_html.html -a
+            -J zap-reports/report_json.json \
+            -w zap-reports/report_md.md \
+            -r zap-reports/report_html.html -a
 
-      - name: Upload ZAP Reports
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: zap-report
-          path: |
-            report_html.html
-            report_md.md
-            report_json.json
+      - name: Sho
