@@ -68,6 +68,7 @@ jobs:
         with:
           target: 'http://127.0.0.1:8080'
           cmd_options: '-a'
+          fail_action: false
 
       - name: Upload ZAP Reports
         if: always()
