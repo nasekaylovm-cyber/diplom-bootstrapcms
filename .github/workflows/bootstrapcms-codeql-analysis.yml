@@ -2,9 +2,9 @@ name: bootstrapcms CodeQL
 
 on:
   push:
-    branches: ["nasekaylovm-cyber-patch-1 "]
+    branches: ["master"]
   pull_request:
-    branches: ["nasekaylovm-cyber-patch-1 "]
+    branches: ["master"]
   schedule:
     - cron: '0 4 * * 0'
   workflow_dispatch:
