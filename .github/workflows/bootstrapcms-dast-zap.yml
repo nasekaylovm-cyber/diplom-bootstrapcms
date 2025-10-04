@@ -1,64 +1,44 @@
-name: bootstrapcms OWASP ZAP DAST Scan
+name: ZAP DAST Scan
 
 on:
   push:
-    branches: ["master"]
+    branches: [ master ]
   workflow_dispatch:
 
 jobs:
   zap_scan:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up PHP
+      - name: Set up PHP 7.4
         uses: shivammathur/setup-php@v2
         with:
-          php-version: 8.1
-          extensions: mbstring, sqlite, pdo_sqlite, tokenizer
+          php-version: 7.4
+          extensions: mbstring, pdo, sqlite, tokenizer
+          coverage: none
 
       - name: Install Composer dependencies
-        run: composer install --no-interaction --no-progress --prefer-dist
-
-      - name: Prepare Laravel environment
         run: |
-          cp .env.example .env || true
-          php artisan key:generate || true
-          mkdir -p database
-          touch database/database.sqlite
-          php artisan config:clear || true
-          php artisan cache:clear || true
+          composer install --no-interaction --no-progress --prefer-dist
 
       - name: Start Laravel server
         run: |
-          php artisan serve --host=0.0.0.0 --port=8080 &
-          sleep 15
-          curl -I http://127.0.0.1:8080 || true
+          php artisan key:generate
+          nohup php -S 127.0.0.1:8080 -t public > /dev/null 2>&1 &
+          sleep 10
 
       - name: Run OWASP ZAP Baseline Scan
-        continue-on-error: true
-        run: |
-          mkdir -p zap-reports
-          docker run --rm -u root \
-            -v ${{ github.workspace }}/zap-reports:/zap/wrk:rw \
-            --network="host" \
-            ghcr.io/zaproxy/zaproxy:stable \
-            zap-baseline.py -t http://127.0.0.1:8080 \
-            -r /zap/wrk/report.html -J /zap/wrk/report.json -w /zap/wrk/report.md -a || true
+        uses: zaproxy/action-baseline@v0.10.0
+        with:
+          target: 'http://127.0.0.1:8080'
+          cmd_options: '-a -T 5 -m 5'
+          allow_issue_writing: false
 
-      - name: Debug Laravel log (if errors)
-        if: always()
-        run: |
-          echo "=== Laravel Log Output ==="
-          cat storage/logs/laravel.log || echo "No laravel.log found"
-          echo "=== ZAP Report Files ==="
-          ls -la zap-reports || true
-
-      - name: Upload ZAP scan results
-        if: always()
+      - name: Upload ZAP report
         uses: actions/upload-artifact@v4
         with:
-          name: zap-scan-results
-          path: zap-reports/
+          name: zap-scan-report
+          path: zap_report.html
