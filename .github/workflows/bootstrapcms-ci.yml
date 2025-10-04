@@ -2,9 +2,9 @@ name: bootstrapcms CI
 
 on:
   push:
-    branches: ["nasekaylovm-cyber-patch-1"]
+    branches: ["master"]
   pull_request:
-    branches: ["nasekaylovm-cyber-patch-1"]
+    branches: ["master"]
   workflow_dispatch:
 
 permissions:
