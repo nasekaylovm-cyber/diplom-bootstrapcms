@@ -13,37 +13,95 @@ jobs:
     runs-on: ubuntu-latest
 
     permissions:
-      actions: write
       contents: read
       security-events: write
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      # ✅ Даем полные права рабочей директории (иначе zap.yaml не создается)
-      - name: Fix permissions
-        run: sudo chmod -R 777 ${{ github.workspace }}
-
-      # ✅ Запуск ZAP Baseline Scan
-      - name: Run ZAP baseline scan
-        uses: zaproxy/action-baseline@v0.9.0
+      - name: Setup PHP 5.6 + Composer v1
+        uses: shivammathur/setup-php@v2
         with:
-          target: "http://127.0.0.1:8080"
-          cmd_options: "-a"
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          php-version: '5.6'
+          tools: composer:v1
+          extensions: mbstring, pdo_sqlite
 
-      # ✅ Исправляем права для отчетов (чтобы можно было загрузить)
-      - name: Fix report permissions
-        run: sudo chmod 666 report_* || true
+      - name: Install composer deps
+        run: composer install --no-interaction --prefer-dist --no-plugins --no-scripts
 
-      # ✅ Загружаем артефакты с правильным именем
+      - name: Prepare sqlite DB and .env (use sqlite to avoid MySQL timing issues)
+        run: |
+          mkdir -p database
+          touch database/database.sqlite
+          cp .env.example .env || true
+          # set sqlite connection
+          if grep -q '^DB_CONNECTION=' .env; then
+            sed -i "s/^DB_CONNECTION=.*/DB_CONNECTION=sqlite/" .env
+          else
+            echo "DB_CONNECTION=sqlite" >> .env
+          fi
+          # set DB_DATABASE to absolute path
+          GW=${GITHUB_WORKSPACE:-$PWD}
+          if grep -q '^DB_DATABASE=' .env; then
+            sed -i "s@^DB_DATABASE=.*@DB_DATABASE=${GW}/database/database.sqlite@" .env
+          else
+            echo "DB_DATABASE=${GW}/database/database.sqlite" >> .env
+          fi
+          php artisan key:generate || true
+          php artisan migrate --force || true
+
+      - name: Start application (bind to 0.0.0.0 so Docker container can reach it)
+        run: |
+          # try to use artisan serve if available, else built-in server
+          if [ -f artisan ]; then
+            php artisan serve --host=0.0.0.0 --port=8080 > /tmp/serve.log 2>&1 &
+          else
+            php -S 0.0.0.0:8080 > /tmp/serve.log 2>&1 &
+          fi
+          # wait up to 2 minutes for HTTP 200
+          for i in $(seq 1 60); do
+            if curl -sSf http://127.0.0.1:8080 >/dev/null 2>&1; then
+              echo "app is up"
+              break
+            fi
+            echo "waiting for app ($i/60)..."
+            sleep 2
+          done
+          if ! curl -sSf http://127.0.0.1:8080 >/dev/null 2>&1; then
+            echo "=== /tmp/serve.log ==="
+            tail -n 200 /tmp/serve.log || true
+            echo "App did not start on 127.0.0.1:8080 — aborting"
+            exit 1
+          fi
+
+      - name: Prepare zap reports dir (writeable for container)
+        run: |
+          mkdir -p zap-reports
+          chmod -R 777 zap-reports
+
+      - name: Run OWASP ZAP Baseline (manual docker run)
+        run: |
+          docker pull ghcr.io/zaproxy/zaproxy:stable
+          # run as root and use host network so zap can reach http://127.0.0.1:8080
+          docker run --rm --user root --network=host -v "$PWD"/zap-reports:/zap/wrk:rw ghcr.io/zaproxy/zaproxy:stable \
+            zap-baseline.py -t http://127.0.0.1:8080 \
+            -J /zap/wrk/report_json.json -w /zap/wrk/report_md.md -r /zap/wrk/report_html.html -a
+        timeout-minutes: 30
+
+      - name: Show brief scan summary (if file exists)
+        run: |
+          if [ -f zap-reports/report_md.md ]; then
+            echo "==== ZAP summary ===="
+            grep -E "FAIL-NEW|WARN-NEW|PASS:" -m 5 zap-reports/report_md.md || true
+            echo "====================="
+          else
+            echo "No report_md.md found"
+          fi
+
       - name: Upload ZAP reports
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: zap-scan-report
-          path: |
-            report_json.json
-            report_md.md
-            report_html.html
+          path: zap-reports/
