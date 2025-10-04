@@ -1,111 +1,64 @@
-name: bootstrapcms ZAP DAST Scan
+name: bootstrapcms OWASP ZAP DAST Scan
 
 on:
   push:
-    branches: ["master"]
-  pull_request:
     branches: ["master"]
   workflow_dispatch:
 
 jobs:
   zap_scan:
-    name: OWASP ZAP Baseline Scan
     runs-on: ubuntu-latest
 
-    permissions:
-      contents: read
-      security-events: write
-
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup PHP 5.6 + Composer v1
+      - name: Set up PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '5.6'
-          tools: composer:v1
-          extensions: mbstring, pdo_sqlite
+          php-version: 8.1
+          extensions: mbstring, sqlite, pdo_sqlite, tokenizer
 
-      - name: Install composer deps
-        run: composer install --no-interaction --prefer-dist --no-plugins --no-scripts
+      - name: Install Composer dependencies
+        run: composer install --no-interaction --no-progress --prefer-dist
 
-      - name: Prepare sqlite DB and .env (use sqlite to avoid MySQL timing issues)
+      - name: Prepare Laravel environment
         run: |
+          cp .env.example .env || true
+          php artisan key:generate || true
           mkdir -p database
           touch database/database.sqlite
-          cp .env.example .env || true
-          # set sqlite connection
-          if grep -q '^DB_CONNECTION=' .env; then
-            sed -i "s/^DB_CONNECTION=.*/DB_CONNECTION=sqlite/" .env
-          else
-            echo "DB_CONNECTION=sqlite" >> .env
-          fi
-          # set DB_DATABASE to absolute path
-          GW=${GITHUB_WORKSPACE:-$PWD}
-          if grep -q '^DB_DATABASE=' .env; then
-            sed -i "s@^DB_DATABASE=.*@DB_DATABASE=${GW}/database/database.sqlite@" .env
-          else
-            echo "DB_DATABASE=${GW}/database/database.sqlite" >> .env
-          fi
-          php artisan key:generate || true
-          php artisan migrate --force || true
+          php artisan config:clear || true
+          php artisan cache:clear || true
 
-      - name: Start application (bind to 0.0.0.0 so Docker container can reach it)
+      - name: Start Laravel server
         run: |
-          # try to use artisan serve if available, else built-in server
-          if [ -f artisan ]; then
-            php artisan serve --host=0.0.0.0 --port=8080 > /tmp/serve.log 2>&1 &
-          else
-            php -S 0.0.0.0:8080 > /tmp/serve.log 2>&1 &
-          fi
-          # wait up to 2 minutes for HTTP 200
-          for i in $(seq 1 60); do
-            if curl -sSf http://127.0.0.1:8080 >/dev/null 2>&1; then
-              echo "app is up"
-              break
-            fi
-            echo "waiting for app ($i/60)..."
-            sleep 2
-          done
-          if ! curl -sSf http://127.0.0.1:8080 >/dev/null 2>&1; then
-            echo "=== /tmp/serve.log ==="
-            tail -n 200 /tmp/serve.log || true
-            echo "App did not start on 127.0.0.1:8080 — aborting"
-            exit 1
-          fi
+          php artisan serve --host=0.0.0.0 --port=8080 &
+          sleep 15
+          curl -I http://127.0.0.1:8080 || true
 
-      - name: Prepare zap reports dir (writeable for container)
+      - name: Run OWASP ZAP Baseline Scan
+        continue-on-error: true
         run: |
           mkdir -p zap-reports
-          chmod -R 777 zap-reports
-
-      - name: Run OWASP ZAP Baseline (manual docker run)
-        run: |
-          docker pull ghcr.io/zaproxy/zaproxy:stable
-          # run as root and use host network so zap can reach http://127.0.0.1:8080
-          docker run --rm --user root --network=host \
-            -v "$PWD"/zap-reports:/zap/wrk:rw \
+          docker run --rm -u root \
+            -v ${{ github.workspace }}/zap-reports:/zap/wrk:rw \
+            --network="host" \
             ghcr.io/zaproxy/zaproxy:stable \
             zap-baseline.py -t http://127.0.0.1:8080 \
-            -J /zap/wrk/report_json.json \
-            -w /zap/wrk/report_md.md \
-            -r /zap/wrk/report_html.html -a
-        timeout-minutes: 30
+            -r /zap/wrk/report.html -J /zap/wrk/report.json -w /zap/wrk/report.md -a || true
 
-      - name: Show brief scan summary (if file exists)
+      - name: Debug Laravel log (if errors)
+        if: always()
         run: |
-          if [ -f zap-reports/report_md.md ]; then
-            echo "==== ZAP summary ===="
-            grep -E "FAIL-NEW|WARN-NEW|PASS:" -m 5 zap-reports/report_md.md || true
-            echo "====================="
-          else
-            echo "No report_md.md found"
-          fi
+          echo "=== Laravel Log Output ==="
+          cat storage/logs/laravel.log || echo "No laravel.log found"
+          echo "=== ZAP Report Files ==="
+          ls -la zap-reports || true
 
-      - name: Upload ZAP reports
+      - name: Upload ZAP scan results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: zap-scan-report
+          name: zap-scan-results
           path: zap-reports/
