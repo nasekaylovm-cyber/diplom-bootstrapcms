@@ -1,44 +1,81 @@
-name: ZAP DAST Scan
+name: bootstrapcms DAST-OWASP ZAP
 
 on:
   push:
-    branches: [ master ]
+    branches: ["master"]
+  pull_request:
+    branches: ["master"]
   workflow_dispatch:
 
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+  security-events: write
+
 jobs:
-  zap_scan:
-    runs-on: ubuntu-22.04
+  dast:
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:5.7
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: test
+        options: >-
+          --health-cmd="mysqladmin ping --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=3
+        ports:
+          - 3306:3306
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up PHP 7.4
+      - name: Setup PHP 5.6
         uses: shivammathur/setup-php@v2
         with:
-          php-version: 7.4
-          extensions: mbstring, pdo, sqlite, tokenizer
+          php-version: '5.6'
+          tools: composer:v1
           coverage: none
+          extensions: mbstring, pdo_mysql
 
-      - name: Install Composer dependencies
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist --no-plugins --no-scripts
+
+      - name: Prepare .env and DB
         run: |
-          composer install --no-interaction --no-progress --prefer-dist
+          cp .env.example .env || true
+          php artisan key:generate || true
+          php artisan migrate --force || true
 
-      - name: Start Laravel server
+      - name: Start application
+        run: nohup php artisan serve --host=127.0.0.1 --port=8080 > /tmp/serve.log 2>&1 &
+
+      - name: Wait for app
         run: |
-          php artisan key:generate
-          nohup php -S 127.0.0.1:8080 -t public > /dev/null 2>&1 &
-          sleep 10
+          for i in {1..30}; do
+            curl -sSf http://127.0.0.1:8080 && break || sleep 2
+          done
 
-      - name: Run OWASP ZAP Baseline Scan
-        uses: zaproxy/action-baseline@v0.10.0
+      - name: Run ZAP baseline scan
+        uses: zaproxy/action-baseline@v0.9.0
+        env:
+          ZAP_DOCKER_IMAGE: ghcr.io/zaproxy/zaproxy:stable
         with:
           target: 'http://127.0.0.1:8080'
-          cmd_options: '-a -T 5 -m 5'
-          allow_issue_writing: false
+          cmd_options: '-a'
+          fail_action: false
 
-      - name: Upload ZAP report
+      - name: Upload ZAP Reports
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: zap-scan-report
-          path: zap_report.html
+          name: zap-report
+          path: |
+            report_html.html
+            report_md.md
+            report_json.json
