@@ -31,7 +31,8 @@ jobs:
           target: 'http://127.0.0.1:8080'
           fail_action: false
           cmd_options: '-a'
-          upload_artifact: false   # ⛔️ ключ: отключает автосоздание артефакта zap_scan
+          upload_artifact: false   # отключает автосоздание артефакта zap_scan
+          allow_issue_writing: false   # отключает автоработу с GitHub Issues,  ZAP выведет отчёт в лог и сохранит файлы — без попыток трогать GitHub AP
 
       # Загружаем отчёты вручную, чтобы обойти баг zaproxy/action-baseline
       - name: Upload ZAP reports manually
