@@ -21,7 +21,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up ZAP baseline scan
+      # ✅ Даем полные права рабочей директории (иначе zap.yaml не создается)
+      - name: Fix permissions
+        run: sudo chmod -R 777 ${{ github.workspace }}
+
+      # ✅ Запуск ZAP Baseline Scan
+      - name: Run ZAP baseline scan
         uses: zaproxy/action-baseline@v0.9.0
         with:
           target: "http://127.0.0.1:8080"
@@ -29,9 +34,16 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # ✅ фиксим права доступа и имена артефактов
-      - name: Fix permissions for report files
-        run: |
-          chmod 644 report_json.json || true
-          chmod 644 report_md.md || true
-          chmod 644 report_ht_
+      # ✅ Исправляем права для отчетов (чтобы можно было загрузить)
+      - name: Fix report permissions
+        run: sudo chmod 666 report_* || true
+
+      # ✅ Загружаем артефакты с правильным именем
+      - name: Upload ZAP reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: zap-scan-report
+          path: |
+            report_json.json
+            report_md.md
+            report_html.html
