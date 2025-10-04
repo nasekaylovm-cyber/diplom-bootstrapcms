@@ -1,4 +1,4 @@
-name: boodstrapcms ZAP DAST Scan
+name: bootstrapcms ZAP DAST Scan
 
 on:
   push:
