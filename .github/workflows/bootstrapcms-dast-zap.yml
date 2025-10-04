@@ -56,8 +56,9 @@ jobs:
           done
 
       - name: Run ZAP baseline scan
-        uses: zaproxy/action-baseline@v0.7.0
+        uses: zaproxy/action-baseline@v0.9.0
         with:
           target: 'http://127.0.0.1:8080'
+          cmd_options: '-a'
           # если есть правила → оставь, иначе удали строку ниже
           # rules_file_name: 'zap_rules/rules.conf'
