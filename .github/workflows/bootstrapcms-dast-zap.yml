@@ -19,23 +19,19 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Start local app (пример)
+      - name: Start local PHP server
         run: |
           php -S 127.0.0.1:8080 -t public > /tmp/server.log 2>&1 &
-          sleep 5
+          sleep 10
 
-      - name: Run ZAP baseline scan
-        id: zap
-        uses: zaproxy/action-baseline@v0.9.0
-        with:
-          target: 'http://127.0.0.1:8080'
-          fail_action: false
-          cmd_options: '-a'
-          upload_artifact: false   # отключает автосоздание артефакта zap_scan
-          allow_issue_writing: false   # отключает автоработу с GitHub Issues,  ZAP выведет отчёт в лог и сохранит файлы — без попыток трогать GitHub AP
+      - name: Run OWASP ZAP Baseline Scan manually (Docker)
+        run: |
+          docker pull ghcr.io/zaproxy/zaproxy:stable
+          docker run --network=host -v $PWD:/zap/wrk/:rw ghcr.io/zaproxy/zaproxy:stable \
+            zap-baseline.py -t http://127.0.0.1:8080 \
+            -J report_json.json -w report_md.md -r report_html.html -a
 
-      # Загружаем отчёты вручную, чтобы обойти баг zaproxy/action-baseline
-      - name: Upload ZAP reports manually
+      - name: Upload ZAP Reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
