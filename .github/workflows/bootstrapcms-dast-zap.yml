@@ -9,8 +9,6 @@ on:
 
 permissions:
   contents: read
-  issues: write
-  pull-requests: write
   security-events: write
 
 jobs:
@@ -29,17 +27,14 @@ jobs:
       - name: Run ZAP baseline scan
         id: zap
         uses: zaproxy/action-baseline@v0.9.0
-        env:
-          ZAP_DOCKER_IMAGE: ghcr.io/zaproxy/zaproxy:stable
         with:
           target: 'http://127.0.0.1:8080'
           fail_action: false
           cmd_options: '-a'
-          allow_issue_writing: false  # отключаем авто-заливку в issues
-          rules_file_name: ''
-          artifact_name: ''  # 🔧 Отключаем автосоздание zap_scan
+          upload_artifact: false   # ⛔️ ключ: отключает автосоздание артефакта zap_scan
 
-      - name: Upload ZAP Reports manually
+      # Загружаем отчёты вручную, чтобы обойти баг zaproxy/action-baseline
+      - name: Upload ZAP reports manually
         if: always()
         uses: actions/upload-artifact@v4
         with:
