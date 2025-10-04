@@ -1,4 +1,4 @@
-name: bootstrapcms DAST-OWASP ZAP
+name: ZAP DAST Scan
 
 on:
   push:
@@ -7,45 +7,31 @@ on:
     branches: ["master"]
   workflow_dispatch:
 
-permissions:
-  contents: read
-  security-events: write
-
 jobs:
-  dast:
+  zap_scan:
+    name: OWASP ZAP Baseline Scan
     runs-on: ubuntu-latest
+
+    permissions:
+      actions: write
+      contents: read
+      security-events: write
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Prepare workspace
-        run: |
-          mkdir -p zap-reports
-          chmod -R 777 zap-reports
+      - name: Set up ZAP baseline scan
+        uses: zaproxy/action-baseline@v0.9.0
+        with:
+          target: "http://127.0.0.1:8080"
+          cmd_options: "-a"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Start local PHP server
+      # ✅ фиксим права доступа и имена артефактов
+      - name: Fix permissions for report files
         run: |
-          if [ -d "public" ]; then
-            php -S 127.0.0.1:8080 -t public > /tmp/server.log 2>&1 &
-          elif [ -d "src" ]; then
-            php -S 127.0.0.1:8080 -t src > /tmp/server.log 2>&1 &
-          else
-            php -S 127.0.0.1:8080 > /tmp/server.log 2>&1 &
-          fi
-          sleep 10
-          echo "Server started. Checking..."
-          curl -I http://127.0.0.1:8080 || true
-
-      - name: Run OWASP ZAP Baseline Scan manually (Docker)
-        run: |
-          docker pull ghcr.io/zaproxy/zaproxy:stable
-          docker run --user root --network=host \
-            -v $PWD/zap-reports:/zap/wrk/:rw \
-            ghcr.io/zaproxy/zaproxy:stable \
-            zap-baseline.py -t http://127.0.0.1:8080 \
-            -J zap-reports/report_json.json \
-            -w zap-reports/report_md.md \
-            -r zap-reports/report_html.html -a
-
-      - name: Sho
+          chmod 644 report_json.json || true
+          chmod 644 report_md.md || true
+          chmod 644 report_ht_
